@@ -1,0 +1,156 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Map CSS variables to Tailwind v4 color utilities */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* ============================================
+   Golf Practice OS — Tailwind v4 + shadcn/ui (New York)
+   Deep forest green + warm gold clubhouse theme
+   Optimized for mobile at the range (high contrast, large targets)
+   ============================================ */
+
+:root {
+  /* Golf Clubhouse Palette (light, outdoor-friendly) */
+  --background: oklch(0.98 0.005 85);        /* Warm cream/off-white */
+  --foreground: oklch(0.18 0.01 260);        /* Near-black text */
+  
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.01 260);
+  
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.01 260);
+  
+  /* Primary: Deep Forest Green */
+  --primary: oklch(0.32 0.08 155);           /* #0F5132 equivalent */
+  --primary-foreground: oklch(0.98 0.005 85);
+  
+  /* Accent: Warm Gold / Bronze */
+  --accent: oklch(0.72 0.12 65);             /* Rich gold */
+  --accent-foreground: oklch(0.18 0.01 260);
+  
+  --secondary: oklch(0.94 0.02 85);
+  --secondary-foreground: oklch(0.25 0.01 260);
+  
+  --muted: oklch(0.94 0.01 85);
+  --muted-foreground: oklch(0.48 0.01 260);
+  
+  --destructive: oklch(0.55 0.22 25);
+  --destructive-foreground: oklch(0.98 0.005 85);
+  
+  /* Borders & Inputs */
+  --border: oklch(0.88 0.01 85);
+  --input: oklch(0.92 0.01 85);
+  --ring: oklch(0.32 0.08 155);
+  
+  /* Radius — New York style (slightly more modern) */
+  --radius: 0.625rem;
+  
+  /* Golf-specific semantic tokens */
+  --success: oklch(0.55 0.15 155);
+  --target: oklch(0.68 0.18 55);             /* Bullseye gold */
+  --focus: oklch(0.45 0.12 200);             /* Calm blue-green for focus states */
+}
+
+/* Dark mode (secondary, still usable outdoors) */
+.dark {
+  --background: oklch(0.16 0.01 260);
+  --foreground: oklch(0.95 0.005 85);
+  
+  --card: oklch(0.20 0.01 260);
+  --card-foreground: oklch(0.95 0.005 85);
+  
+  --popover: oklch(0.20 0.01 260);
+  --popover-foreground: oklch(0.95 0.005 85);
+  
+  --primary: oklch(0.68 0.12 155);           /* Brighter green in dark */
+  --primary-foreground: oklch(0.16 0.01 260);
+  
+  --accent: oklch(0.78 0.14 65);
+  --accent-foreground: oklch(0.16 0.01 260);
+  
+  --secondary: oklch(0.26 0.01 260);
+  --secondary-foreground: oklch(0.90 0.005 85);
+  
+  --muted: oklch(0.24 0.01 260);
+  --muted-foreground: oklch(0.65 0.01 260);
+  
+  --border: oklch(0.30 0.01 260);
+  --input: oklch(0.26 0.01 260);
+  --ring: oklch(0.68 0.12 155);
+}
+
+/* Base */
+* {
+  border-color: var(--border);
+}
+
+body {
+  font-family: var(--font-geist-sans, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+/* Beautiful focus states for range use (large, obvious) */
+:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Large touch-friendly buttons for outdoor use */
+button, [role="button"], a {
+  touch-action: manipulation;
+}
+
+/* Golf-themed utility classes */
+.golf-card {
+  transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1), 
+              box-shadow 0.1s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+.golf-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.05), 0 4px 6px -4px rgb(0 0 0 / 0.05);
+}
+
+.session-timer {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* High contrast for sunlight readability on mobile */
+@media (max-width: 640px) {
+  .text-7xl, .text-8xl {
+    line-height: 0.95;
+  }
+}
+
+/* shadcn New York style overrides (subtle) */
+.rounded-xl {
+  border-radius: calc(var(--radius) + 2px);
+}

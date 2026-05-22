@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Background circle - deep forest green -->
+  <circle cx="256" cy="256" r="240" fill="#0F5132"/>
+  
+  <!-- Subtle inner gradient effect -->
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#14532D"/>
+      <stop offset="100%" stop-color="#0F5132"/>
+    </linearGradient>
+  </defs>
+  <circle cx="256" cy="256" r="220" fill="url(#g)"/>
+  
+  <!-- Golf ball (white with dimples) -->
+  <circle cx="256" cy="256" r="130" fill="#F8FAFC"/>
+  
+  <!-- Dimple pattern (stylized) -->
+  <g fill="#E2E8F0">
+    <!-- Top row -->
+    <circle cx="220" cy="200" r="12"/>
+    <circle cx="256" cy="195" r="12"/>
+    <circle cx="292" cy="200" r="12"/>
+    <!-- Middle rows -->
+    <circle cx="200" cy="240" r="12"/>
+    <circle cx="236" cy="235" r="12"/>
+    <circle cx="272" cy="235" r="12"/>
+    <circle cx="308" cy="240" r="12"/>
+    <circle cx="200" cy="276" r="12"/>
+    <circle cx="236" cy="276" r="12"/>
+    <circle cx="272" cy="276" r="12"/>
+    <circle cx="308" cy="276" r="12"/>
+    <!-- Bottom row -->
+    <circle cx="220" cy="312" r="12"/>
+    <circle cx="256" cy="317" r="12"/>
+    <circle cx="292" cy="312" r="12"/>
+  </g>
+  
+  <!-- Elegant "OS" monogram in forest green -->
+  <text 
+    x="256" 
+    y="275" 
+    font-family="system-ui, -apple-system, BlinkMacSystemFont, sans-serif" 
+    font-size="92" 
+    font-weight="700" 
+    fill="#0F5132" 
+    text-anchor="middle" 
+    dominant-baseline="middle"
+    letter-spacing="-4">OS</text>
+</svg>
