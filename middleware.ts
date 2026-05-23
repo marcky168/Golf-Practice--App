@@ -2,35 +2,40 @@ import { type NextRequest, NextResponse } from "next/server";
 import { updateSession } from "@/lib/supabase/proxy";
 
 export async function middleware(request: NextRequest) {
-  const { supabaseResponse, user } = await updateSession(request);
+  try {
+    const { supabaseResponse, user } = await updateSession(request);
 
-  const pathname = request.nextUrl.pathname;
+    const pathname = request.nextUrl.pathname;
 
-  // Public routes that don't require login
-  const isPublicRoute =
-    pathname.startsWith("/login") ||
-    pathname.startsWith("/auth") ||
-    pathname.startsWith("/_next") ||
-    pathname.startsWith("/icons") ||
-    pathname.includes(".");
+    // Public routes that don't require login
+    const isPublicRoute =
+      pathname.startsWith("/login") ||
+      pathname.startsWith("/auth") ||
+      pathname.startsWith("/_next") ||
+      pathname.startsWith("/icons") ||
+      pathname.includes(".");
 
-  // If user is not logged in and trying to access a protected route
-  if (!user && !isPublicRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    // Store the original URL so we can redirect back after login
-    url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
+    if (!user && !isPublicRoute) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.searchParams.set("next", pathname);
+      return NextResponse.redirect(url);
+    }
+
+    if (user && pathname === "/login") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/";
+      return NextResponse.redirect(url);
+    }
+
+    return supabaseResponse;
+  } catch (err) {
+    // Last-resort safety net so a transient Supabase / edge runtime issue
+    // never serves a hard 500 to a real user. The actual stack will appear
+    // in Vercel function logs for follow-up.
+    console.error("[middleware] uncaught error, passing through:", err);
+    return NextResponse.next({ request });
   }
-
-  // If user is already logged in and goes to /login, redirect to home
-  if (user && pathname === "/login") {
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    return NextResponse.redirect(url);
-  }
-
-  return supabaseResponse;
 }
 
 export const config = {
