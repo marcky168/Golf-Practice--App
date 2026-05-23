@@ -29,7 +29,7 @@ export default async function GamesHub() {
   const attemptCounts: Record<string, number> = {};
 
   sessions
-    .filter(s => s.type === "game" && s.score !== null && s.score !== undefined)
+    .filter((s): s is typeof s & { score: number } => s.type === "game" && s.score != null)
     .forEach(s => {
       const gameId = (s.config as any)?.gameId as string | undefined;
       if (!gameId) return;

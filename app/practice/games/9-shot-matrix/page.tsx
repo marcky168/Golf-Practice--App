@@ -64,7 +64,9 @@ export default function NineShotMatrix() {
     getUserSessions(500).then(sessions => {
       const best: Record<string, number> = {};
       sessions
-        .filter(s => s.type === "game" && (s.config as any)?.gameId === "9-shot-matrix" && s.score != null)
+        .filter((s): s is typeof s & { score: number } =>
+          s.type === "game" && (s.config as any)?.gameId === "9-shot-matrix" && s.score != null
+        )
         .forEach(s => {
           const club = (s.config as any)?.club as string | undefined;
           if (!club) return;

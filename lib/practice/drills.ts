@@ -34,7 +34,7 @@ export const ALL_DRILLS: Drill[] = [
   // SHORT GAME
   { id: "sg1", name: "Chip 20 yd — Landing Spot Drill", category: "short-game", club: "8-Iron / PW", distance: "20 yd", target: "3 ft circle on green", lie: "fairway", instructions: "Pick one landing spot every time. Roll out to hole." },
   { id: "sg2", name: "Pitch 40 yd — Varying Lies", category: "short-game", club: "56°", distance: "30-45 yd", target: "Random pin", lie: "rough", instructions: "One ball from fairway, one from light rough, one from uphill." },
-  { id: "sg3", name: "Bump & Run 15 yd", category: "short-game", club: "7-Iron", distance: "15 yd", target: "Hole", lie: "tight" },
+  { id: "sg3", name: "Bump & Run 15 yd", category: "short-game", club: "7-Iron", distance: "15 yd", target: "Hole", lie: "fairway", instructions: "Tight lie — clean ball-then-turf contact." },
 
   // PUTTING
   { id: "pu1", name: "Lag Putting — 25 ft", category: "putting", club: "Putter", distance: "25 ft", target: "3 ft circle around hole", instructions: "Speed is everything. Die the ball at the back of the cup." },

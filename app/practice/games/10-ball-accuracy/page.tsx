@@ -76,7 +76,9 @@ export default function TenBallAccuracy() {
       const bestClub: Record<string, number> = {};
       const bestCombo: Record<string, number> = {};
       sessions
-        .filter(s => s.type === "game" && (s.config as any)?.gameId === "10-ball-accuracy" && s.score != null)
+        .filter((s): s is typeof s & { score: number } =>
+          s.type === "game" && (s.config as any)?.gameId === "10-ball-accuracy" && s.score != null
+        )
         .forEach(s => {
           const cfg = s.config as any;
           const club = cfg?.club as string | undefined;

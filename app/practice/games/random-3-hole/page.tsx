@@ -84,8 +84,9 @@ export default function Random3Hole() {
   }
 
   function resetGame() {
-    setDrills([]);
-    setCurrentIndex(0);
+    setHoles([]);
+    setCurrentHole(0);
+    setCurrentShotInHole(0);
     setShotEntries([]);
     setPendingShape(null);
     setPendingTrajectory(null);

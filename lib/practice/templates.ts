@@ -11,7 +11,8 @@ export const PREBUILT_TEMPLATES: Array<{
   label: string;
   description: string;
   duration: number;
-  configFactory: () => SessionConfig;
+  /** Returns null when the template requires a user bag that isn't available */
+  configFactory: () => SessionConfig | null;
 }> = [
   {
     id: "iron-precision",
