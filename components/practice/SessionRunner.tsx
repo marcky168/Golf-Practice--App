@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { X, CheckCircle2 } from 'lucide-react';
+import { X, CheckCircle2, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import type { SessionConfig, Drill, BlockResult } from '@/lib/practice/types';
 import { ReflectionForm } from './ReflectionForm';
@@ -15,6 +15,8 @@ import {
   notifyCadenceTick,
   notifyRestComplete,
   unlockPracticeAudio,
+  primePracticeAudio,
+  isIosLikeDevice,
 } from '@/lib/practice/feedback';
 import { useWakeLock } from '@/lib/use-wake-lock';
 import { buildSessionTiming } from '@/lib/practice/session-duration';
@@ -104,6 +106,16 @@ export function SessionRunner({
   const sessionStartedAtRef = useRef(initialSessionStartedAt ?? Date.now());
 
   const totalSteps = config.drills.length;
+  const warmupShotCount =
+    config.warmupShotCount ??
+    config.drills.filter(d => d.sessionPhase === 'warmup').length;
+  const practiceShotCount = Math.max(0, totalSteps - warmupShotCount);
+  const isWarmupIndex = (index: number) =>
+    warmupShotCount > 0 && index < warmupShotCount;
+  const isInWarmup = isWarmupIndex(currentIndex);
+  const warmupRepNumber = isInWarmup ? currentIndex + 1 : 0;
+  const practiceRepNumber = isInWarmup ? 0 : currentIndex - warmupShotCount + 1;
+
   const ballsPerBlock = config.ballsPerBlock ?? 0;
   const numBlocks = config.numBlocks ?? 0;
   const isMultiBlock = ballsPerBlock > 0 && numBlocks > 0;
@@ -173,9 +185,11 @@ export function SessionRunner({
 
   // Rest interval
   function startRest(nextIndex: number) {
+    primePracticeAudio();
     setRestSecondsLeft(cadenceSeconds);
     setPhase('rest');
     restTimerRef.current = setInterval(() => {
+      primePracticeAudio();
       setRestSecondsLeft(s => {
         if (s <= 1) {
           clearInterval(restTimerRef.current!);
@@ -199,6 +213,18 @@ export function SessionRunner({
     setRestSecondsLeft(0);
     setPhase('running');
     setCurrentIndex(nextIndex);
+  }
+
+  function endWarmup() {
+    if (warmupShotCount <= 0 || currentIndex >= warmupShotCount) return;
+    unlockPracticeAudio();
+    toast.success('Warm-up complete — starting random practice');
+    clearInterval(restTimerRef.current!);
+    setRestSecondsLeft(0);
+    if (phase === 'rest') {
+      setPhase('running');
+    }
+    setCurrentIndex(warmupShotCount);
   }
 
   function intentionForRepIndex(index: number): Intention | null {
@@ -487,6 +513,9 @@ export function SessionRunner({
   if (phase === 'rest') {
     const nextDrill = config.drills[currentIndex + 1];
     const completedDrill = config.drills[currentIndex];
+    const nextIsWarmup = nextDrill ? isWarmupIndex(currentIndex + 1) : false;
+    const completedIsWarmup = isWarmupIndex(currentIndex);
+    const showEndWarmupOnRest = warmupShotCount > 0 && currentIndex < warmupShotCount;
     const completedIntention = intentionForRepIndex(currentIndex);
     const lastRep = repRecords[repRecords.length - 1];
     const isPuttingOrBunker =
@@ -497,8 +526,24 @@ export function SessionRunner({
     return (
       <>
         <div className='min-h-screen bg-background flex flex-col pb-8'>
-          <div className='border-b bg-blue-50 dark:bg-blue-950/30 px-4 py-3 flex items-center justify-between sticky top-0 z-50'>
-            <div className='font-medium text-sm text-blue-700 dark:text-blue-400'>REST — review last shot</div>
+          <div
+            className={
+              'border-b px-4 py-3 flex items-center justify-between sticky top-0 z-50 ' +
+              (completedIsWarmup
+                ? 'bg-amber-50 dark:bg-amber-950/40'
+                : 'bg-blue-50 dark:bg-blue-950/30')
+            }
+          >
+            <div
+              className={
+                'font-medium text-sm ' +
+                (completedIsWarmup
+                  ? 'text-amber-800 dark:text-amber-300'
+                  : 'text-blue-700 dark:text-blue-400')
+              }
+            >
+              {completedIsWarmup ? 'WARM-UP REST' : 'PRACTICE REST'} — review last shot
+            </div>
             <button onClick={handleExit} className='text-xs text-destructive flex items-center gap-1'>
               <X className='h-3.5 w-3.5' /> End Session
             </button>
@@ -526,10 +571,26 @@ export function SessionRunner({
                 Two honest taps, one mental replay — then the tone means go.
               </p>
             </div>
+            {showEndWarmupOnRest && (
+              <Button
+                size='lg'
+                variant='secondary'
+                className='w-full max-w-sm mb-4 h-14 text-base font-semibold border-amber-300 bg-amber-100 text-amber-950 hover:bg-amber-200 dark:bg-amber-900/50 dark:text-amber-100'
+                onClick={endWarmup}
+              >
+                <ArrowRight className='mr-2 h-5 w-5' />
+                End warm-up → Start practice
+              </Button>
+            )}
             {nextDrill && (
               <div className='bg-card border rounded-2xl px-6 py-4 mb-8 text-left w-full max-w-sm'>
-                <div className='text-xs text-muted-foreground tracking-widest mb-2'>NEXT UP</div>
+                <div className='text-xs text-muted-foreground tracking-widest mb-2'>
+                  {nextIsWarmup ? 'NEXT — WARM-UP' : 'NEXT — PRACTICE'}
+                </div>
                 <div className='text-xl font-semibold'>{nextDrill.club} — {nextDrill.distance}</div>
+                {nextDrill.name && (
+                  <div className='text-sm text-muted-foreground mt-1'>{nextDrill.name}</div>
+                )}
                 {nextDrill.target && <div className='text-muted-foreground text-sm mt-0.5'>{nextDrill.target}</div>}
                 {(() => {
                   const nextIdx = currentIndex + 1;
@@ -587,14 +648,54 @@ export function SessionRunner({
   return (
     <>
       <div className='min-h-screen bg-background flex flex-col pb-8'>
-        <div className='border-b bg-card px-4 py-3 flex items-center justify-between sticky top-0 z-50'>
-          <div className='font-medium text-sm'>{config.title}</div>
-          <button onClick={handleExit} className='text-xs text-destructive flex items-center gap-1'>
+        <div
+          className={
+            'border-b px-4 py-3 flex items-center justify-between sticky top-0 z-50 ' +
+            (isInWarmup ? 'bg-amber-50 dark:bg-amber-950/40' : 'bg-card')
+          }
+        >
+          <div className='min-w-0 flex-1 pr-2'>
+            {warmupShotCount > 0 && (
+              <div
+                className={
+                  'text-[10px] font-bold tracking-[0.2em] uppercase mb-0.5 ' +
+                  (isInWarmup ? 'text-amber-700 dark:text-amber-400' : 'text-primary')
+                }
+              >
+                {isInWarmup ? 'Warm-up' : 'Practice'}
+              </div>
+            )}
+            <div className='font-medium text-sm truncate'>{config.title}</div>
+          </div>
+          <button onClick={handleExit} className='text-xs text-destructive flex items-center gap-1 shrink-0'>
             <X className='h-3.5 w-3.5' /> End Session
           </button>
         </div>
 
         <div className='flex-1 flex flex-col items-center justify-center px-4 max-w-xl mx-auto w-full text-center'>
+          {warmupShotCount > 0 && (
+            <div
+              className={
+                'w-full max-w-md mb-4 rounded-2xl border px-4 py-3 text-sm ' +
+                (isInWarmup
+                  ? 'border-amber-300/60 bg-amber-50/80 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100'
+                  : 'border-primary/25 bg-primary/5 text-foreground')
+              }
+            >
+              {isInWarmup ? (
+                <>
+                  <span className='font-semibold'>Warm-up shot {warmupRepNumber} of {warmupShotCount}</span>
+                  <span className='text-amber-800/80 dark:text-amber-200/80'> — short clubs, easy tempo</span>
+                </>
+              ) : (
+                <>
+                  <span className='font-semibold text-primary'>Practice shot {practiceRepNumber} of {practiceShotCount}</span>
+                  <span className='text-muted-foreground'> — random, course-like</span>
+                </>
+              )}
+            </div>
+          )}
+
           <div className='mb-6'>
             <div className='text-[11px] tracking-[3px] text-muted-foreground mb-1'>
               {isCountdown ? 'TIME REMAINING' : 'ELAPSED TIME'}
@@ -605,10 +706,15 @@ export function SessionRunner({
           </div>
 
           <div className='w-full max-w-md mb-8'>
-            <div className='uppercase tracking-[2px] text-xs text-muted-foreground mb-2'>CURRENT SHOT</div>
+            <div className='uppercase tracking-[2px] text-xs text-muted-foreground mb-2'>
+              {isInWarmup ? 'Warm-up shot' : 'Practice shot'}
+            </div>
             <div className='text-3xl font-semibold tracking-tighter mb-1'>
               {currentDrill.club} — {currentDrill.distance}
             </div>
+            {currentDrill.name && (
+              <div className='text-sm font-medium text-muted-foreground mb-1'>{currentDrill.name}</div>
+            )}
             <div className='text-xl text-muted-foreground'>{currentDrill.target || 'Pick a precise target'}</div>
             {currentDrill.instructions && (
               <div className='text-sm text-muted-foreground mt-2 italic'>{currentDrill.instructions}</div>
@@ -682,6 +788,15 @@ export function SessionRunner({
                   <span>{progressPercent}%</span>
                 </div>
               </>
+            ) : warmupShotCount > 0 ? (
+              <div className='flex justify-between text-sm mb-2 font-medium'>
+                <div>
+                  {isInWarmup
+                    ? `Warm-up ${warmupRepNumber}/${warmupShotCount}`
+                    : `Practice ${practiceRepNumber}/${practiceShotCount}`}
+                </div>
+                <div>{progressPercent}% session</div>
+              </div>
             ) : (
               <div className='flex justify-between text-sm mb-2 font-medium'>
                 <div>Shot {currentIndex + 1} of {totalSteps}</div>
@@ -691,8 +806,27 @@ export function SessionRunner({
             {!isMultiBlock && <Progress value={progressPercent} className='h-3' />}
           </div>
 
+          {warmupShotCount > 0 && isInWarmup && (
+            <Button
+              size='lg'
+              variant='secondary'
+              className='w-full max-w-sm mb-6 h-14 text-base font-semibold border-amber-300 bg-amber-100 text-amber-950 hover:bg-amber-200 dark:bg-amber-900/50 dark:text-amber-100'
+              onClick={endWarmup}
+            >
+              <ArrowRight className='mr-2 h-5 w-5' />
+              End warm-up → Start practice
+            </Button>
+          )}
+
           {cadenceSeconds > 0 && (
-            <p className='text-xs text-muted-foreground mb-3'>{cadenceSeconds}s cadence between shots</p>
+            <p className='text-xs text-muted-foreground mb-3'>
+              {cadenceSeconds}s cadence between shots
+              {isIosLikeDevice() && (
+                <span className='block mt-1 text-amber-700/90 dark:text-amber-400/90'>
+                  iPhone: use your side volume buttons (media volume). Tones unlock when you tap Start or Mark Shot.
+                </span>
+              )}
+            </p>
           )}
 
           <Button

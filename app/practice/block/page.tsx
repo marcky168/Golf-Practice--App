@@ -19,6 +19,7 @@ import { IntentionPicker, type ShapeType, type TrajectoryType } from "@/componen
 import { ResumePrompt, clearPartialSession, type PartialSession } from "@/components/practice/ResumePrompt";
 import { savePracticeSession } from "@/app/actions";
 import { enrichConfigForSave, timingFromCompletion } from "@/lib/practice/session-save";
+import { unlockPracticeAudio } from "@/lib/practice/feedback";
 import { BlockDrillLibraryList } from "@/components/practice/BlockDrillLibraryList";
 import {
   BLOCK_DRILL_LIBRARY,
@@ -116,6 +117,7 @@ export default function BlockPracticePage() {
   }
 
   function startBlockSession() {
+    unlockPracticeAudio();
     if (!isChecklistComplete || !isIntentionSet) return;
     if (!selectedClub) {
       toast.error("Select a club from your profile bag.");
@@ -144,6 +146,7 @@ export default function BlockPracticePage() {
   }
 
   function startLibrarySession() {
+    unlockPracticeAudio();
     if (!canStartLibrary || !selectedPresetId) return;
 
     const config = loadBlockDrillPreset(selectedPresetId, userBag);
@@ -195,6 +198,7 @@ export default function BlockPracticePage() {
   }
 
   function handleResume(saved: PartialSession) {
+    unlockPracticeAudio();
     setSessionConfig(saved.config);
     setResumeData(saved);
     if (saved.fixedIntention) {

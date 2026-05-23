@@ -12,6 +12,7 @@ import {
 import { shotForChipping, drillWithinChippingRange } from "./chipping";
 import { buildPerRepIntentions, blockUsesRandomMode } from "./intentions";
 import { shotForSwingLength } from "./partial-shots";
+import { attachWarmupToSession } from "./generators";
 
 export const BUILDER_FOCUS_OPTIONS: { value: BuilderFocus; label: string; categories: SkillCategory[] }[] = [
   { value: "full-swing", label: "Full Swing", categories: ["driver", "fairway-woods", "long-irons", "mid-irons", "short-irons", "wedges", "tempo", "full-swing"] },
@@ -184,21 +185,24 @@ export function createBuilderSessionConfig(params: {
     numBlocks
   );
 
-  return {
-    type: "block",
-    title: `${modeLabel}: ${clubLabel}${swingLabel} · ${numBlocks}×${ballsPerBlock}`,
-    durationMinutes: 0,
-    focusAreas: categories,
-    drills,
-    focusCue,
-    builderFocus: focus,
-    club: selectedClubs[0],
-    clubs: selectedClubs,
-    swingLength,
-    ballsPerBlock,
-    numBlocks,
-    cadenceSeconds,
-    practiceMode,
-    perRepIntentions,
-  };
+  return attachWarmupToSession(
+    {
+      type: "block",
+      title: `${modeLabel}: ${clubLabel}${swingLabel} · ${numBlocks}×${ballsPerBlock}`,
+      durationMinutes: 0,
+      focusAreas: categories,
+      drills,
+      focusCue,
+      builderFocus: focus,
+      club: selectedClubs[0],
+      clubs: selectedClubs,
+      swingLength,
+      ballsPerBlock,
+      numBlocks,
+      cadenceSeconds,
+      practiceMode,
+      perRepIntentions,
+    },
+    { userBag: bag }
+  );
 }

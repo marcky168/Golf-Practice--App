@@ -3,6 +3,7 @@ import "./globals.css";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
 import { PwaRegister } from "@/components/PwaRegister";
+import { RangeModeProvider } from "@/components/RangeModeProvider";
 import { AppHeader } from "@/components/AppHeader";
 import { BottomNav } from "@/components/BottomNav";
 import { getAuthUser } from "@/lib/supabase/server";
@@ -45,10 +46,12 @@ export default async function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <RangeModeProvider>
           <PwaRegister />
           <AppHeader userEmail={user?.email} />
           {children}
           <BottomNav />
+          </RangeModeProvider>
           <Toaster 
             position="top-center" 
             richColors 

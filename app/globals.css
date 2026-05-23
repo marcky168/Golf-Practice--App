@@ -154,3 +154,153 @@ button, [role="button"], a {
 .rounded-xl {
   border-radius: calc(var(--radius) + 2px);
 }
+
+/* Range mode — bright sun readability + full clubhouse character (overrides light/dark) */
+html.range-mode {
+  --background: oklch(0.985 0.014 92);
+  --foreground: oklch(0.17 0.03 155);
+
+  --card: oklch(0.995 0.01 95);
+  --card-foreground: oklch(0.17 0.03 155);
+
+  --popover: oklch(0.995 0.01 95);
+  --popover-foreground: oklch(0.17 0.03 155);
+
+  /* Deep forest green — slightly darker for sun glare */
+  --primary: oklch(0.29 0.11 155);
+  --primary-foreground: oklch(0.99 0.012 92);
+
+  /* Warm gold accent stays visible outdoors */
+  --accent: oklch(0.64 0.17 58);
+  --accent-foreground: oklch(0.15 0.03 155);
+
+  --secondary: oklch(0.93 0.035 145);
+  --secondary-foreground: oklch(0.22 0.04 155);
+
+  --muted: oklch(0.94 0.028 100);
+  --muted-foreground: oklch(0.4 0.035 155);
+
+  --destructive: oklch(0.52 0.22 25);
+  --destructive-foreground: oklch(0.99 0.01 92);
+
+  --border: oklch(0.8 0.045 145);
+  --input: oklch(0.97 0.02 100);
+  --ring: oklch(0.45 0.12 155);
+
+  --success: oklch(0.48 0.14 155);
+  --target: oklch(0.64 0.17 58);
+  --focus: oklch(0.42 0.1 200);
+}
+
+html.range-mode body {
+  font-weight: 500;
+  color: var(--foreground);
+  background-color: var(--background);
+  /* Soft fairway wash — not flat white */
+  background-image:
+    radial-gradient(ellipse 140% 70% at 50% -15%, oklch(0.88 0.07 145 / 0.22), transparent 55%),
+    radial-gradient(ellipse 90% 50% at 100% 0%, oklch(0.92 0.06 58 / 0.12), transparent 45%),
+    linear-gradient(180deg, oklch(0.97 0.02 95) 0%, var(--background) 35%);
+  background-attachment: fixed;
+}
+
+html.range-mode .text-muted-foreground {
+  color: var(--muted-foreground);
+}
+
+/* Cards & surfaces — depth + green-tinted edges */
+html.range-mode .bg-card,
+html.range-mode .golf-card {
+  border-color: oklch(0.78 0.05 145);
+  box-shadow:
+    0 1px 0 oklch(0.3 0.08 155 / 0.06),
+    0 4px 16px oklch(0.25 0.06 155 / 0.1);
+}
+
+html.range-mode .golf-card:hover {
+  box-shadow:
+    0 1px 0 oklch(0.3 0.08 155 / 0.08),
+    0 8px 22px oklch(0.25 0.06 155 / 0.14);
+}
+
+/* Hero / nav green band — rich, not washed out */
+html.range-mode .bg-primary {
+  background-color: oklch(0.27 0.11 155);
+  color: oklch(0.99 0.012 92);
+}
+
+/* Accent callouts (tips, highlights) */
+html.range-mode .bg-accent {
+  background-color: oklch(0.64 0.17 58);
+  color: oklch(0.15 0.03 155);
+}
+
+html.range-mode .bg-accent\/10,
+html.range-mode .bg-accent\/15,
+html.range-mode .bg-accent\/20,
+html.range-mode .bg-accent\/30 {
+  background-color: oklch(0.94 0.06 58);
+}
+
+html.range-mode .border-accent,
+html.range-mode .border-accent\/40 {
+  border-color: oklch(0.58 0.14 58);
+}
+
+html.range-mode .border-primary\/30,
+html.range-mode .border-primary\/40 {
+  border-color: oklch(0.45 0.1 155 / 0.45);
+}
+
+/* Muted panels (onboarding, hints) */
+html.range-mode .bg-muted\/40,
+html.range-mode .bg-muted\/50 {
+  background-color: oklch(0.94 0.03 145);
+}
+
+/* Primary-tinted chips & soft highlights */
+html.range-mode .bg-primary\/5,
+html.range-mode .bg-primary\/10 {
+  background-color: oklch(0.94 0.04 155);
+}
+
+html.range-mode .bg-primary\/20 {
+  background-color: oklch(0.9 0.06 155);
+}
+
+/* Bottom nav — clear separation */
+html.range-mode nav.border-t {
+  border-color: oklch(0.78 0.05 145);
+  background-color: oklch(0.99 0.01 95 / 0.97);
+}
+
+/* Buttons: stronger fill outdoors */
+html.range-mode button,
+html.range-mode [role="button"] {
+  min-height: 48px;
+}
+
+html.range-mode :focus-visible {
+  outline-width: 4px;
+  outline-color: oklch(0.42 0.12 155);
+}
+
+/* Warm-up / rest UI (hardcoded Tailwind ambers & blues) stay legible */
+html.range-mode .bg-amber-50,
+html.range-mode .bg-amber-50\/80 {
+  background-color: oklch(0.96 0.05 75);
+}
+
+html.range-mode .bg-amber-100 {
+  background-color: oklch(0.93 0.07 75);
+}
+
+html.range-mode .border-amber-200,
+html.range-mode .border-amber-300,
+html.range-mode .border-amber-300\/60 {
+  border-color: oklch(0.78 0.1 65);
+}
+
+html.range-mode .bg-blue-50 {
+  background-color: oklch(0.95 0.03 240);
+}

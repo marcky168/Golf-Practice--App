@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -13,6 +13,8 @@ import type { SkillCategory, SessionConfig } from "@/lib/practice/types";
 import { savePracticeSession, getClubBag } from "@/app/actions";
 import { enrichConfigForSave, timingFromCompletion } from "@/lib/practice/session-save";
 import { ResumePrompt, clearPartialSession, type PartialSession } from "@/components/practice/ResumePrompt";
+import { loadLastMixedConfig, saveLastMixedConfig } from "@/lib/practice/last-mixed-config";
+import { unlockPracticeAudio } from "@/lib/practice/feedback";
 
 export default function MixedSessionPage() {
   const [step, setStep] = useState<"config" | "running" | "complete">("config");
@@ -29,8 +31,74 @@ export default function MixedSessionPage() {
   const [resumeData, setResumeData] = useState<PartialSession | null>(null);
   const [userBag, setUserBag] = useState<{ club: string; carry: number }[]>([]);
 
+  const runSession = useCallback(
+    (bag: { club: string; carry: number }[], opts: {
+      durationMinutes: number;
+      focusAreas: SkillCategory[];
+      restIntervalSeconds: number;
+      useYardageFilter: boolean;
+      minYards: number;
+      maxYards: number;
+      toastMessage?: string;
+      unlockOnStart?: boolean;
+    }) => {
+      if (opts.unlockOnStart !== false) unlockPracticeAudio();
+      setRestInterval(opts.restIntervalSeconds);
+      const config = generateMixedSession({
+        durationMinutes: opts.durationMinutes,
+        focusAreas: opts.focusAreas,
+        userBag: bag.length > 0 ? bag : undefined,
+        minDistance: opts.useYardageFilter ? opts.minYards : undefined,
+        maxDistance: opts.useYardageFilter ? opts.maxYards : undefined,
+      });
+      setGeneratedConfig(config);
+      setStep("running");
+      saveLastMixedConfig({
+        title: config.title,
+        duration: opts.durationMinutes,
+        selectedAreas: opts.focusAreas,
+        restInterval: opts.restIntervalSeconds,
+        useYardageFilter: opts.useYardageFilter,
+        minYards: opts.minYards,
+        maxYards: opts.maxYards,
+      });
+      toast.success(opts.toastMessage ?? `Mixed session generated — ${config.drills.length} shots`);
+      return config;
+    },
+    []
+  );
+
   useEffect(() => {
-    getClubBag().then(setUserBag);
+    const params = new URLSearchParams(window.location.search);
+    const isRepeat = params.get("repeat") === "1";
+
+    getClubBag().then(bag => {
+      setUserBag(bag);
+
+      if (isRepeat) {
+        const stored = loadLastMixedConfig();
+        if (stored && stored.selectedAreas.length > 0) {
+          setDuration(stored.duration);
+          setSelectedAreas(stored.selectedAreas);
+          setUseYardageFilter(stored.useYardageFilter);
+          setMinYards(stored.minYards);
+          setMaxYards(stored.maxYards);
+          runSession(bag, {
+            durationMinutes: stored.duration,
+            focusAreas: stored.selectedAreas,
+            restIntervalSeconds: stored.restInterval,
+            useYardageFilter: stored.useYardageFilter,
+            minYards: stored.minYards,
+            maxYards: stored.maxYards,
+            toastMessage: "Repeating last mixed session — fresh shots, same setup",
+          });
+          const url = new URL(window.location.href);
+          url.searchParams.delete("repeat");
+          window.history.replaceState({}, "", url.toString());
+        }
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount: bag load + optional one-shot repeat
   }, []);
 
   const toggleArea = (area: SkillCategory) => {
@@ -42,16 +110,14 @@ export default function MixedSessionPage() {
   };
 
   const generateAndStart = () => {
-    const config = generateMixedSession({
+    runSession(userBag, {
       durationMinutes: duration,
       focusAreas: selectedAreas,
-      userBag: userBag.length > 0 ? userBag : undefined,
-      minDistance: useYardageFilter ? minYards : undefined,
-      maxDistance: useYardageFilter ? maxYards : undefined,
+      restIntervalSeconds: restInterval,
+      useYardageFilter,
+      minYards,
+      maxYards,
     });
-    setGeneratedConfig(config);
-    setStep("running");
-    toast.success(`Mixed session generated — ${config.drills.length} shots`);
   };
 
   const handleComplete = async (result: any) => {
@@ -87,6 +153,7 @@ export default function MixedSessionPage() {
   };
 
   const handleResume = (saved: PartialSession) => {
+    unlockPracticeAudio();
     setGeneratedConfig(saved.config);
     setResumeData(saved);
     setStep("running");

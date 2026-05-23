@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Target, Shuffle, Award, Calendar, Play, TrendingUp, Clock, Flame, User } from "lucide-react";
+import { Target, Clock, Flame, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { format, subMonths } from "date-fns";
 import { getUserSessions } from "@/app/actions";
@@ -8,6 +8,9 @@ import { getLoggedPracticeMinutes, getSessionDurationMinutes } from "@/lib/pract
 import { WelcomeHint } from "@/components/WelcomeHint";
 import { PartialSessionBanner } from "@/components/PartialSessionBanner";
 import { RepeatLastSessionCard } from "@/components/RepeatLastSessionCard";
+import { RepeatLastMixedCard } from "@/components/RepeatLastMixedCard";
+import { DashboardHero } from "@/components/DashboardHero";
+import { PwaInstallNudge } from "@/components/PwaInstallNudge";
 
 // Helper: Calculate current practice streak
 function calculateCurrentStreak(sessions: any[]): number {
@@ -80,85 +83,7 @@ export default async function GolfPracticeOSDashboard() {
             <p className="text-lg text-primary-foreground/75 mt-2">Focused sessions. Real improvement. No fluff.</p>
           </div>
 
-          {/* 4 Primary Quick-Start Actions - only visible when logged in */}
-          {user ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Link href="/practice/builder" className="group">
-              <Card className="golf-card h-full border-0 shadow-md hover:shadow-xl transition-all active:scale-[0.985] border-primary/30">
-                <CardHeader>
-                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-3 group-hover:bg-primary/15 transition">
-                    <Target className="w-6 h-6 text-primary" />
-                  </div>
-                  <CardTitle className="text-2xl">Practice Builder</CardTitle>
-                  <CardDescription>Custom sessions or pre-built drill library — blocks, cadence, logging.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button className="w-full" size="lg">
-                    <Play className="mr-2 h-4 w-4" /> Build Session
-                  </Button>
-                </CardContent>
-              </Card>
-            </Link>
-
-            <Link href="/practice/random" className="group">
-              <Card className="golf-card h-full border-0 shadow-md hover:shadow-xl transition-all active:scale-[0.985]">
-                <CardHeader>
-                  <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center mb-3 group-hover:bg-accent/15 transition">
-                    <Shuffle className="w-6 h-6 text-accent" />
-                  </div>
-                  <CardTitle className="text-2xl">Random Practice</CardTitle>
-                  <CardDescription>Interleaved, game-like drills. Best for on-course transfer.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button variant="secondary" className="w-full" size="lg">
-                    <Play className="mr-2 h-4 w-4" /> Generate Random
-                  </Button>
-                </CardContent>
-              </Card>
-            </Link>
-
-            <Link href="/practice/mixed" className="group">
-              <Card className="golf-card h-full border-0 shadow-md hover:shadow-xl transition-all active:scale-[0.985]">
-                <CardHeader>
-                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-3 group-hover:bg-primary/15 transition">
-                    <TrendingUp className="w-6 h-6 text-primary" />
-                  </div>
-                  <CardTitle className="text-2xl">Mixed Session</CardTitle>
-                  <CardDescription>Smart hybrid: block warm-up + random main set. Recommended.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button className="w-full" size="lg">
-                    <Play className="mr-2 h-4 w-4" /> Start Mixed
-                  </Button>
-                </CardContent>
-              </Card>
-            </Link>
-
-            <Link href="/practice/games" className="group">
-              <Card className="golf-card h-full border-0 shadow-md hover:shadow-xl transition-all active:scale-[0.985]">
-                <CardHeader>
-                  <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center mb-3 group-hover:bg-accent/15 transition">
-                    <Award className="w-6 h-6 text-accent" />
-                  </div>
-                  <CardTitle className="text-2xl">Games &amp; Challenges</CardTitle>
-                  <CardDescription>Pressure training. 10-ball, up &amp; down, lag ladders &amp; more.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button variant="secondary" className="w-full" size="lg">
-                    <Play className="mr-2 h-4 w-4" /> Browse Games
-                  </Button>
-                </CardContent>
-              </Card>
-            </Link>
-          </div>
-          ) : (
-            // Show login prompt when not logged in
-            <div className="text-center py-4">
-              <Link href="/login">
-                <Button size="lg" className="px-8">Log in to access practice tools</Button>
-              </Link>
-            </div>
-          )}
+          <DashboardHero loggedIn={!!user} />
         </div>
       </div>
 
@@ -167,7 +92,12 @@ export default async function GolfPracticeOSDashboard() {
         {/* Unsaved session reminder */}
         <PartialSessionBanner />
 
-        {/* One-tap repeat of the last builder session (range shortcut) */}
+        {user && completedSessions.length > 0 && (
+          <PwaInstallNudge hasCompletedSession />
+        )}
+
+        {/* One-tap repeat shortcuts */}
+        {user && <RepeatLastMixedCard />}
         {user && <RepeatLastSessionCard />}
 
         {/* Strong Welcome for users with zero sessions */}

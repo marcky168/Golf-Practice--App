@@ -8,9 +8,10 @@ import { getUserSessions, getClubBag, saveClubBag, signOut, type ClubEntry } fro
 import { getLoggedPracticeMinutes } from "@/lib/practice/session-duration";
 import {
   User, LogOut, Target, Trophy, Clock, TrendingUp,
-  Save, Plus, Trash2, Loader2, Check,
+  Save, Plus, Trash2, Loader2, Check, Pencil, ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
+import { RangeModeToggle } from "@/components/RangeModeToggle";
 
 // ─── Master club list ─────────────────────────────────────────────────────────
 const MASTER_CLUBS: { category: string; clubs: string[] }[] = [
@@ -21,6 +22,18 @@ const MASTER_CLUBS: { category: string; clubs: string[] }[] = [
   { category: "Putter",  clubs: ["Putter"] },
 ];
 const MASTER_FLAT = MASTER_CLUBS.flatMap(c => c.clubs);
+
+/** Longest carry first; putter last; missing carry sorts below set distances */
+function sortBagByCarry(entries: ClubEntry[]): ClubEntry[] {
+  return [...entries].sort((a, b) => {
+    if (a.club === "Putter") return 1;
+    if (b.club === "Putter") return -1;
+    const carryA = a.carry > 0 ? a.carry : -1;
+    const carryB = b.carry > 0 ? b.carry : -1;
+    if (carryA !== carryB) return carryB - carryA;
+    return a.club.localeCompare(b.club);
+  });
+}
 
 function calculateStreak(sessions: any[]): number {
   if (!sessions.length) return 0;
@@ -51,6 +64,7 @@ export default function ProfilePage() {
   const [loadingBag, setLoadingBag] = useState(true);
   const [saving, setSaving] = useState(false);
   const [customClub, setCustomClub] = useState("");
+  const [showBagEditor, setShowBagEditor] = useState(false);
 
   useEffect(() => {
     // Load user + stats
@@ -75,7 +89,7 @@ export default function ProfilePage() {
 
     // Load bag
     getClubBag().then(saved => {
-      setBag(saved.length > 0 ? saved : []);
+      setBag(saved.length > 0 ? sortBagByCarry(saved) : []);
       setLoadingBag(false);
     });
   }, []);
@@ -114,11 +128,21 @@ export default function ProfilePage() {
   async function handleSave() {
     const invalid = bag.filter(e => e.club !== "Putter" && !e.carry);
     if (invalid.length) { toast.error("Enter carry for: " + invalid.map(e => e.club).join(", ")); return; }
+    const sorted = sortBagByCarry(bag);
+    setBag(sorted);
     setSaving(true);
-    const res = await saveClubBag(bag);
+    const res = await saveClubBag(sorted);
     setSaving(false);
-    if (res.success) toast.success("Club bag saved!");
-    else toast.error(res.error || "Failed to save.");
+    if (res.success) {
+      toast.success("Club bag saved!");
+      setShowBagEditor(false);
+    } else toast.error(res.error || "Failed to save.");
+  }
+
+  function formatCarry(entry: ClubEntry): string {
+    if (entry.club === "Putter") return "—";
+    if (!entry.carry) return "Not set";
+    return `${entry.carry} yd`;
   }
 
   async function handleSignOut() {
@@ -126,6 +150,8 @@ export default function ProfilePage() {
     toast.success("Signed out");
     router.push("/login");
   }
+
+  const bagSorted = sortBagByCarry(bag);
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
@@ -204,22 +230,53 @@ export default function ProfilePage() {
         )}
       </div>
 
+      {/* ── Range display ─────────────────────────────────────────────────── */}
+      <div className="mb-8">
+        <h2 className="font-semibold text-lg mb-4">Range display</h2>
+        <RangeModeToggle />
+      </div>
+
       {/* ── My Golf Bag ───────────────────────────────────────────────────── */}
       <div className="mb-8">
-        <h2 className="font-semibold text-lg mb-1">My Golf Bag</h2>
-        <p className="text-sm text-muted-foreground mb-6">
-          Select your clubs and enter carry distances. Used to personalise drills and auto-suggest targets in games.
-        </p>
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <h2 className="font-semibold text-lg mb-1">My Golf Bag</h2>
+            <p className="text-sm text-muted-foreground">
+              {showBagEditor
+                ? "Select clubs and carry distances for personalised drills."
+                : "Your clubs and stock carries on the range."}
+            </p>
+          </div>
+          {!loadingBag && (
+            <Button
+              type="button"
+              variant={showBagEditor ? "secondary" : "outline"}
+              size="sm"
+              className="shrink-0 h-11 px-3"
+              onClick={() => setShowBagEditor(v => !v)}
+            >
+              {showBagEditor ? (
+                <>
+                  <ChevronUp className="h-4 w-4 mr-1.5" /> Done
+                </>
+              ) : (
+                <>
+                  <Pencil className="h-4 w-4 mr-1.5" />
+                  {bag.length === 0 ? "Set up bag" : "Edit bag"}
+                </>
+              )}
+            </Button>
+          )}
+        </div>
 
         {loadingBag ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading bag…
           </div>
-        ) : (
+        ) : showBagEditor ? (
           <>
-            {/* Step 1 — pick clubs */}
             <div className="mb-6">
-              <div className="text-xs font-semibold text-muted-foreground tracking-wider mb-4">STEP 1 — SELECT YOUR CLUBS</div>
+              <div className="text-xs font-semibold text-muted-foreground tracking-wider mb-4">SELECT YOUR CLUBS</div>
               <div className="space-y-4">
                 {MASTER_CLUBS.map(({ category, clubs }) => (
                   <div key={category}>
@@ -230,8 +287,9 @@ export default function ProfilePage() {
                         return (
                           <button
                             key={club}
+                            type="button"
                             onClick={() => toggleClub(club)}
-                            className={"px-3 py-1.5 rounded-full border text-sm font-medium transition flex items-center gap-1.5 " + (
+                            className={"px-3 py-1.5 rounded-full border text-sm font-medium transition flex items-center gap-1.5 min-h-[44px] " + (
                               selected
                                 ? "bg-primary text-primary-foreground border-primary"
                                 : "bg-card hover:bg-muted border-border"
@@ -247,7 +305,6 @@ export default function ProfilePage() {
                 ))}
               </div>
 
-              {/* Custom club */}
               <div className="mt-4">
                 <div className="text-xs font-semibold text-muted-foreground mb-2 tracking-wider">CUSTOM</div>
                 <div className="flex gap-2">
@@ -256,19 +313,18 @@ export default function ProfilePage() {
                     onChange={e => setCustomClub(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && addCustomClub()}
                     placeholder="e.g. 48° Wedge, Chipper…"
-                    className="flex-1 rounded-xl border bg-card px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="flex-1 rounded-xl border bg-card px-3 py-2.5 text-sm min-h-[44px] focus:outline-none focus:ring-2 focus:ring-ring"
                   />
-                  <Button variant="outline" onClick={addCustomClub} disabled={!customClub.trim()}>
+                  <Button variant="outline" onClick={addCustomClub} disabled={!customClub.trim()} className="min-h-[44px]">
                     <Plus className="h-4 w-4 mr-1" /> Add
                   </Button>
                 </div>
               </div>
             </div>
 
-            {/* Step 2 — enter distances */}
             {bag.length > 0 && (
               <div className="mb-6">
-                <div className="text-xs font-semibold text-muted-foreground tracking-wider mb-4">STEP 2 — ENTER CARRY DISTANCES</div>
+                <div className="text-xs font-semibold text-muted-foreground tracking-wider mb-4">CARRY DISTANCES</div>
 
                 <div className="grid grid-cols-[1fr_110px_36px] gap-2 mb-2 px-1">
                   <div className="text-xs font-semibold text-muted-foreground">CLUB</div>
@@ -277,13 +333,13 @@ export default function ProfilePage() {
                 </div>
 
                 <div className="space-y-2">
-                  {bag.map(entry => (
+                  {bagSorted.map(entry => (
                     <div key={entry.club} className="grid grid-cols-[1fr_110px_36px] gap-2 items-center">
-                      <div className="rounded-xl border bg-muted/40 px-3 py-2.5 text-sm font-medium truncate">
+                      <div className="rounded-xl border bg-muted/40 px-3 py-2.5 text-sm font-medium truncate min-h-[44px] flex items-center">
                         {entry.club}
                       </div>
                       {entry.club === "Putter" ? (
-                        <div className="rounded-xl border bg-muted/40 px-3 py-2.5 text-sm text-center text-muted-foreground">N/A</div>
+                        <div className="rounded-xl border bg-muted/40 px-3 py-2.5 text-sm text-center text-muted-foreground min-h-[44px] flex items-center justify-center">N/A</div>
                       ) : (
                         <input
                           type="number"
@@ -292,12 +348,14 @@ export default function ProfilePage() {
                           value={entry.carry || ""}
                           onChange={e => updateCarry(entry.club, e.target.value)}
                           placeholder="150"
-                          className="rounded-xl border bg-card px-3 py-2.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-ring"
+                          className="rounded-xl border bg-card px-3 py-2.5 text-sm text-center min-h-[44px] focus:outline-none focus:ring-2 focus:ring-ring"
                         />
                       )}
                       <button
+                        type="button"
                         onClick={() => removeClub(entry.club)}
-                        className="text-muted-foreground hover:text-destructive transition p-1 justify-self-center"
+                        className="text-muted-foreground hover:text-destructive transition p-2 justify-self-center min-h-[44px] min-w-[44px] flex items-center justify-center"
+                        aria-label={`Remove ${entry.club}`}
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -319,10 +377,41 @@ export default function ProfilePage() {
                 : <><Save className="mr-2 h-4 w-4" /> Save Club Bag ({bag.length} clubs)</>
               }
             </Button>
-            <p className="text-center text-xs text-muted-foreground mt-3">
-              Distances personalise drill yardages and auto-suggest target zones in games.
-            </p>
           </>
+        ) : bag.length === 0 ? (
+          <div className="rounded-2xl border border-dashed p-6 text-center">
+            <p className="text-sm text-muted-foreground mb-4">No clubs in your bag yet.</p>
+            <Button type="button" onClick={() => setShowBagEditor(true)} className="min-h-[44px]">
+              <Pencil className="h-4 w-4 mr-2" /> Set up your bag
+            </Button>
+          </div>
+        ) : (
+          <div className="rounded-2xl border bg-card divide-y">
+            {bagSorted.map(entry => (
+              <div
+                key={entry.club}
+                className="flex items-center justify-between gap-4 px-4 py-3.5 min-h-[52px]"
+              >
+                <span className="font-medium text-sm truncate">{entry.club}</span>
+                <span
+                  className={
+                    "text-sm tabular-nums shrink-0 " +
+                    (entry.carry || entry.club === "Putter"
+                      ? "text-muted-foreground"
+                      : "text-amber-600 dark:text-amber-400 font-medium")
+                  }
+                >
+                  {formatCarry(entry)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!showBagEditor && bag.length > 0 && (
+          <p className="text-xs text-muted-foreground mt-3">
+            Tap Edit bag to change clubs or update carry distances.
+          </p>
         )}
       </div>
     </div>

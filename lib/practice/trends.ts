@@ -209,6 +209,48 @@ export function repsForBlock(
   return reps.filter(r => r.blockIndex === blockIndex);
 }
 
+export type ErrorCorrectionTrendRow = {
+  key: keyof RepErrorCorrection;
+  label: string;
+  yes: number;
+  partial: number;
+  no: number;
+  total: number;
+  /** 0–100 — share of answers that were fully successful */
+  yesPct: number;
+};
+
+/** Roll up error-correction taps across all sessions (for History trends) */
+export function computeAggregateErrorCorrection(sessions: SessionRow[]): ErrorCorrectionTrendRow[] {
+  const allReps: RepRecordSnapshot[] = [];
+  for (const session of sessions) {
+    const reps = session.config?.repRecords ?? [];
+    if (reps.length > 0) allReps.push(...reps);
+  }
+
+  const summary = summarizeErrorCorrection(allReps);
+  if (summary.totalAnswered === 0) return [];
+
+  const rows: ErrorCorrectionTrendRow[] = [];
+  for (const key of CORRECTION_KEYS) {
+    const totals = summary[key];
+    if (!totals) continue;
+    const total = totals.yes + totals.partial + totals.no;
+    if (total === 0) continue;
+    rows.push({
+      key,
+      label: correctionLabel(key),
+      yes: totals.yes,
+      partial: totals.partial,
+      no: totals.no,
+      total,
+      yesPct: Math.round((totals.yes / total) * 100),
+    });
+  }
+
+  return rows.sort((a, b) => a.yesPct - b.yesPct);
+}
+
 export function summarizeBlockResults(blocks: BlockResult[]): { avgConsistency: number | null; totalHits: number; totalMisses: number } {
   const withConsistency = blocks.filter(b => b.consistency != null);
   const avgConsistency = withConsistency.length

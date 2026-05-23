@@ -19,10 +19,15 @@ export type SkillCategory =
   | "tempo"
   | "full-swing";
 
+/** Warm-up vs main practice — used by random sessions */
+export type SessionShotPhase = "warmup" | "practice";
+
 export interface Drill {
   id: string;
   name: string;
   category: SkillCategory;
+  /** When set, SessionRunner shows phase labels and warm-up controls */
+  sessionPhase?: SessionShotPhase;
   club: string;                    // "7-iron", "Driver", "56°", etc.
   distance: string;                // "150 yd", "Full", "8 ft", "30-50 yd"
   target?: string;                 // "Left flag", "Center green", "Bucket"
@@ -83,6 +88,8 @@ export interface SessionConfig {
   durationMinutes: number;
   focusAreas: SkillCategory[];
   drills: Drill[];                 // Ordered list for the session
+  /** Random practice: leading warm-up shots before interleaved practice */
+  warmupShotCount?: number;
   focusCue?: string;               // Global or per-drill override
   notes?: string;
   /** Practice Builder: structured multi-block sessions */

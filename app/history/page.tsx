@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeft, Target, Shuffle, Award, Calendar } from "lucide-react";
 import { HistorySessionDetail } from "./HistorySessionDetail";
 import { PracticeTrends } from "@/components/practice/PracticeTrends";
+import { ErrorCorrectionTrends } from "@/components/practice/ErrorCorrectionTrends";
 import { getSessionDurationMinutes } from "@/lib/practice/session-duration";
 
 export default async function HistoryPage() {
@@ -83,6 +84,20 @@ export default async function HistoryPage() {
               type: s.type,
               config: s.config as import("@/lib/practice/types").SessionConfig | null,
             }))} />
+
+            <div className="border-t mt-8 pt-8">
+              <h3 className="text-sm font-semibold tracking-widest text-muted-foreground uppercase mb-1">
+                Error correction patterns
+              </h3>
+              <p className="text-sm text-muted-foreground mb-6">
+                Rest-timer feedback across all logged shots — spot what to emphasize next visit.
+              </p>
+              <ErrorCorrectionTrends sessions={sessions.map(s => ({
+                started_at: s.started_at,
+                type: s.type,
+                config: s.config as import("@/lib/practice/types").SessionConfig | null,
+              }))} />
+            </div>
           </CardContent>
         </Card>
 

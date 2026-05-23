@@ -1,5 +1,9 @@
 import { SessionConfig } from "./types";
-import { createBlockConfig, generateRandomSession, generateMixedSession } from "./generators";
+import {
+  createBlockConfig,
+  generateRandomSessionWithWarmup,
+  generateMixedSession,
+} from "./generators";
 import { SkillCategory } from "./types";
 
 /**
@@ -26,14 +30,19 @@ export const PREBUILT_TEMPLATES: Array<{
     label: "Wedge Wizard 35",
     description: "Pure wedge distance & trajectory control — mostly random",
     duration: 35,
-    configFactory: () => generateRandomSession({ durationMinutes: 35, focusAreas: ["wedges", "short-game"] }),
+    configFactory: () =>
+      generateRandomSessionWithWarmup({ durationMinutes: 35, focusAreas: ["wedges", "short-game"] }),
   },
   {
     id: "short-game-scramble",
     label: "Short Game Scramble 30",
     description: "Realistic up-and-down practice from every lie",
     duration: 30,
-    configFactory: () => generateRandomSession({ durationMinutes: 30, focusAreas: ["short-game", "putting", "bunker"] }),
+    configFactory: () =>
+      generateRandomSessionWithWarmup({
+        durationMinutes: 30,
+        focusAreas: ["short-game", "putting", "bunker"],
+      }),
   },
   {
     id: "driver-control",
@@ -47,13 +56,18 @@ export const PREBUILT_TEMPLATES: Array<{
     label: "Putting Ladder 25",
     description: "Progressive lag + short pressure putting",
     duration: 25,
-    configFactory: () => generateRandomSession({ durationMinutes: 25, focusAreas: ["putting"] }),
+    configFactory: () =>
+      generateRandomSessionWithWarmup({ durationMinutes: 25, focusAreas: ["putting"] }),
   },
   {
     id: "full-bag-random-60",
     label: "Full Bag Random 60",
     description: "The gold standard — simulates a full round on the range",
     duration: 60,
-    configFactory: () => generateRandomSession({ durationMinutes: 60, focusAreas: ["driver", "mid-irons", "wedges", "short-game", "putting"] }),
+    configFactory: () =>
+      generateRandomSessionWithWarmup({
+        durationMinutes: 60,
+        focusAreas: ["driver", "mid-irons", "wedges", "short-game", "putting"],
+      }),
   },
 ];

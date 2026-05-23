@@ -96,6 +96,175 @@ function parseDrillDistance(drill: Drill): number {
   return (low + high) / 2;
 }
 
+const WARMUP_CATEGORIES = new Set<SkillCategory>([
+  "putting",
+  "short-game",
+  "wedges",
+  "short-irons",
+  "bunker",
+  "tempo",
+]);
+
+const DEFAULT_WARMUP_AREAS: SkillCategory[] = ["putting", "wedges", "short-game", "short-irons"];
+
+/** Short-club warm-up block before random practice — sorted shortest distance first */
+export function generateRandomWarmupDrills(options: {
+  count?: number;
+  focusAreas?: SkillCategory[];
+  userBag?: BagEntry[];
+  minDistance?: number;
+  maxDistance?: number;
+}): Drill[] {
+  const count = options.count ?? 10;
+  const bag = options.userBag ?? [];
+  const bagClubs = bag.map(e => e.club);
+  const minDist = options.minDistance ?? 0;
+  const maxDist = options.maxDistance ?? 9999;
+  const maxWarmupYards = 130;
+
+  const allDrills = buildAugmentedPool(bag);
+
+  function filterWarmupPool(pool: Drill[]): Drill[] {
+    return pool
+      .filter(d => WARMUP_CATEGORIES.has(d.category))
+      .filter(d => {
+        const yards = parseDrillDistance(d);
+        return yards <= maxWarmupYards && yards >= minDist && yards <= maxDist;
+      })
+      .filter(d => (bagClubs.length === 0 ? true : clubInBag(d.club, bagClubs)))
+      .sort((a, b) => parseDrillDistance(a) - parseDrillDistance(b));
+  }
+
+  let pool = filterWarmupPool(allDrills);
+  if (pool.length === 0) {
+    pool = filterWarmupPool(
+      allDrills.filter(d => DEFAULT_WARMUP_AREAS.includes(d.category))
+    );
+  }
+  if (pool.length === 0) {
+    pool = [...allDrills]
+      .filter(d => parseDrillDistance(d) <= maxWarmupYards)
+      .sort((a, b) => parseDrillDistance(a) - parseDrillDistance(b));
+  }
+
+  const drills: Drill[] = [];
+  const usedLast: string[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const available = pool.filter(d => !usedLast.includes(d.club));
+    const pickFrom = available.length > 0 ? available : pool;
+    const chosen = pickFrom[i % pickFrom.length] ?? pickFrom[0] ?? allDrills[0];
+    const withBag = withBagData(chosen, bag);
+    drills.push({
+      ...withBag,
+      id: `${withBag.id}-warmup-${i}`,
+      sessionPhase: "warmup",
+      name: `Warm-up · ${withBag.name}`,
+      instructions: withBag.instructions
+        ? `${withBag.instructions} · Easy tempo — feel the motion`
+        : "Easy tempo — short club, smooth rhythm, no shape pressure yet",
+    });
+    usedLast.push(chosen.club);
+    if (usedLast.length > 2) usedLast.shift();
+  }
+
+  return drills;
+}
+
+const WARMUP_FOCUS_CUE =
+  "Warm-up: smooth tempo with short clubs. Tap “End warm-up” when your body feels ready.";
+
+export type WarmupAttachOptions = {
+  warmupShots?: number;
+  userBag?: BagEntry[];
+  minDistance?: number;
+  maxDistance?: number;
+};
+
+/** Prepends short-club warm-up shots. Skips games and sessions that already have warm-up. */
+export function attachWarmupToSession(
+  config: SessionConfig,
+  options: WarmupAttachOptions = {}
+): SessionConfig {
+  if (
+    config.type === "game" ||
+    config.type === "planned" ||
+    (config.warmupShotCount ?? 0) > 0
+  ) {
+    return config;
+  }
+
+  const areas = config.focusAreas?.length ? config.focusAreas : DEFAULT_WARMUP_AREAS;
+  const warmup = generateRandomWarmupDrills({
+    count: options.warmupShots ?? 10,
+    focusAreas: areas,
+    userBag: options.userBag,
+    minDistance: options.minDistance,
+    maxDistance: options.maxDistance,
+  });
+
+  const practiceDrills = config.drills.map(d =>
+    d.sessionPhase ? d : { ...d, sessionPhase: "practice" as const }
+  );
+
+  let perRepIntentions = config.perRepIntentions;
+  if (perRepIntentions?.length) {
+    perRepIntentions = [...Array(warmup.length).fill(null), ...perRepIntentions];
+  }
+
+  const focusCue = config.focusCue
+    ? `${WARMUP_FOCUS_CUE} Then: ${config.focusCue}`
+    : WARMUP_FOCUS_CUE;
+
+  return {
+    ...config,
+    drills: [...warmup, ...practiceDrills],
+    warmupShotCount: warmup.length,
+    perRepIntentions,
+    focusCue,
+  };
+}
+
+/** Random session with a short-club warm-up block, then full interleaved practice */
+export function generateRandomSessionWithWarmup(
+  options: Parameters<typeof generateRandomSession>[0] & { warmupShots?: number }
+): SessionConfig {
+  const areas = options.focusAreas?.length
+    ? options.focusAreas
+    : (["mid-irons", "wedges", "short-game", "putting"] as SkillCategory[]);
+  const warmupCount = options.warmupShots ?? 10;
+
+  const practice = generateRandomSession({
+    ...options,
+    focusAreas: areas,
+    durationMinutes:
+      options.durationMinutes != null
+        ? Math.max(25, options.durationMinutes - 12)
+        : undefined,
+    numShots:
+      options.numShots != null ? Math.max(25, options.numShots - warmupCount) : undefined,
+  });
+
+  const areaLabel =
+    areas.length > 2 ? "Full-Bag" : areas.map(a => a.replace("-", " ")).join(" + ");
+
+  return attachWarmupToSession(
+    {
+      ...practice,
+      title: `Random ${areaLabel} · Warm-up + Practice`,
+      drills: practice.drills.map(d => ({ ...d, sessionPhase: "practice" as const })),
+      focusCue:
+        "Commit to each random shot like on the course — varied club, distance, and shape.",
+    },
+    {
+      warmupShots: warmupCount,
+      userBag: options.userBag,
+      minDistance: options.minDistance,
+      maxDistance: options.maxDistance,
+    }
+  );
+}
+
 // ─── Random Session ───────────────────────────────────────────────────────────
 export function generateRandomSession(options: {
   durationMinutes?: number;
@@ -181,55 +350,34 @@ export function generateMixedSession(options: {
   maxDistance?: number;
 }) {
   const duration = options.durationMinutes ?? 60;
-  const areas    = options.focusAreas ?? ["mid-irons", "wedges", "short-game"];
-  const bag      = options.userBag ?? [];
-  const minDist  = options.minDistance ?? 0;
-  const maxDist  = options.maxDistance ?? 9999;
-
-  // Warm-up: pick a drill from the first focus area, preferring bag clubs
-  const warmupCategory = areas[0];
-  let warmupPool = getDrillsByCategory([warmupCategory]);
-
-  // Apply distance filter to warmup
-  warmupPool = warmupPool.filter(d => {
-    const dYards = parseDrillDistance(d);
-    return dYards >= minDist && dYards <= maxDist;
-  });
-
-  const bagFiltered = bag.length > 0
-    ? warmupPool.filter(d => clubInBag(d.club, bag.map(e => e.club)))
-    : warmupPool;
-
-  const poolToPickFrom = bagFiltered.length > 0 ? bagFiltered : warmupPool;
-  const baseWarmup = poolToPickFrom.length > 0
-    ? poolToPickFrom[Math.floor(Math.random() * poolToPickFrom.length)]
-    : getDrillsByCategory([warmupCategory])[0] ?? ALL_DRILLS[0];
-
-  const warmupDrill = withBagData(baseWarmup, bag);
-
-  const warmupDrills = Array.from({ length: 10 }, (_, i) => ({
-    ...warmupDrill,
-    id: `${warmupDrill.id}-warm-${i}`,
-    name: `${warmupDrill.name} (Block Warm-up)`,
-  }));
+  const areas = options.focusAreas ?? ["mid-irons", "wedges", "short-game"];
+  const bag = options.userBag ?? [];
+  const minDist = options.minDistance ?? 0;
+  const maxDist = options.maxDistance ?? 9999;
 
   const randomConfig = generateRandomSession({
-    durationMinutes: duration - 15,
-    numShots: Math.floor((duration - 15) * 1.4),
+    durationMinutes: Math.max(25, duration - 12),
+    numShots: Math.floor(Math.max(25, duration - 12) * 1.4),
     focusAreas: areas,
     userBag: bag,
     minDistance: minDist,
     maxDistance: maxDist,
   });
 
-  return {
-    type: "mixed" as const,
-    title: `Mixed: ${warmupDrill.club} Warm-up + Random ${areas[0]}`,
-    durationMinutes: duration,
-    focusAreas: areas,
-    drills: [...warmupDrills, ...randomConfig.drills],
-    focusCue: "Start smooth — build speed only after the 8th ball",
-  };
+  const areaLabel =
+    areas.length > 2 ? "Full-Bag" : areas.map(a => a.replace("-", " ")).join(" + ");
+
+  return attachWarmupToSession(
+    {
+      type: "mixed",
+      title: `Mixed ${areaLabel} · Warm-up + Random`,
+      durationMinutes: duration,
+      focusAreas: areas,
+      drills: randomConfig.drills.map(d => ({ ...d, sessionPhase: "practice" as const })),
+      focusCue: "After warm-up: block-style feel, then random shots for course transfer.",
+    },
+    { userBag: bag, minDistance: minDist, maxDistance: maxDist }
+  );
 }
 
 // ─── Block Config ─────────────────────────────────────────────────────────────
@@ -286,13 +434,20 @@ export function createBlockConfig(params: {
       : base.instructions,
   }));
 
-  return {
-    type: "block",
-    title: `Block: ${displayClub} — ${params.reps} reps`,
-    durationMinutes: 0,
-    focusAreas: [params.skill],
-    drills,
-    focusCue: params.focusCue,
-    club: displayClub,
-  };
+  return attachWarmupToSession(
+    {
+      type: "block",
+      title: `Block: ${displayClub} — ${params.reps} reps`,
+      durationMinutes: 0,
+      focusAreas: [params.skill],
+      drills,
+      focusCue: params.focusCue,
+      club: displayClub,
+    },
+    {
+      userBag: bag,
+      minDistance: params.minDistance,
+      maxDistance: params.maxDistance,
+    }
+  );
 }

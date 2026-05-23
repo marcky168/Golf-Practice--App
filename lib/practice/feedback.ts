@@ -1,4 +1,4 @@
-/** Web Audio cues for practice — no asset files; works offline as PWA */
+/** Web Audio + HTML5 audio cues for practice — works offline as PWA; tuned for iOS */
 
 type AudioCtxGlobal = typeof AudioContext;
 
@@ -11,12 +11,27 @@ function getAudioContextCtor(): AudioCtxGlobal | null {
   );
 }
 
-/**
- * Singleton AudioContext.
- * iOS Safari requires the context to be created/resumed from a user gesture,
- * so we lazily allocate and let `unlockPracticeAudio()` warm it up.
- */
+export function isIosLikeDevice(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
+function setPlaybackAudioSession() {
+  try {
+    const nav = navigator as Navigator & {
+      audioSession?: { type: string };
+    };
+    if (nav.audioSession) {
+      nav.audioSession.type = "playback";
+    }
+  } catch {
+    // ignore
+  }
+}
+
 let sharedCtx: AudioContext | null = null;
+let htmlGo: HTMLAudioElement | null = null;
+let htmlTick: HTMLAudioElement | null = null;
 
 function ensureAudioContext(): AudioContext | null {
   const Ctx = getAudioContextCtor();
@@ -29,81 +44,186 @@ function ensureAudioContext(): AudioContext | null {
       return null;
     }
   }
-  if (sharedCtx.state === "suspended") {
-    void sharedCtx.resume().catch(() => {});
-  }
   return sharedCtx;
 }
 
-function withAudioContext(run: (ctx: AudioContext) => void) {
+async function resumeAudioContext(): Promise<AudioContext | null> {
   const ctx = ensureAudioContext();
-  if (ctx) run(ctx);
+  if (!ctx) return null;
+  if (ctx.state === "suspended") {
+    try {
+      await ctx.resume();
+    } catch {
+      return null;
+    }
+  }
+  return ctx.state === "running" ? ctx : null;
 }
 
-/**
- * Call from a user-gesture handler (e.g. "Start Session" tap) so the first
- * scheduled tone actually plays on iOS Safari. Silent / inaudible.
- */
-export function unlockPracticeAudio(): void {
-  const ctx = ensureAudioContext();
-  if (!ctx) return;
+/** Encode mono float samples as WAV for HTMLAudioElement (iOS-friendly fallback) */
+function encodeWav(samples: Float32Array, sampleRate: number): ArrayBuffer {
+  const numChannels = 1;
+  const bitsPerSample = 16;
+  const blockAlign = (numChannels * bitsPerSample) / 8;
+  const byteRate = sampleRate * blockAlign;
+  const dataSize = samples.length * 2;
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+
+  const writeStr = (offset: number, str: string) => {
+    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+  };
+
+  writeStr(0, "RIFF");
+  view.setUint32(4, 36 + dataSize, true);
+  writeStr(8, "WAVE");
+  writeStr(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitsPerSample, true);
+  writeStr(36, "data");
+  view.setUint32(40, dataSize, true);
+
+  let offset = 44;
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+    offset += 2;
+  }
+  return buffer;
+}
+
+function renderToneAudio(freq: number, durationSec: number, peakGain: number): HTMLAudioElement | null {
+  const Ctx = getAudioContextCtor();
+  if (!Ctx || typeof window === "undefined") return null;
+  const sampleRate = 44100;
+  const length = Math.floor(sampleRate * durationSec);
+  const samples = new Float32Array(length);
+  for (let i = 0; i < length; i++) {
+    const t = i / sampleRate;
+    const env = Math.exp(-5 * t / durationSec);
+    samples[i] = Math.sin(2 * Math.PI * freq * t) * peakGain * env;
+  }
+  const wav = encodeWav(samples, sampleRate);
+  const blob = new Blob([wav], { type: "audio/wav" });
+  const audio = new Audio(URL.createObjectURL(blob));
+  audio.preload = "auto";
+  audio.setAttribute("playsinline", "true");
+  return audio;
+}
+
+function ensureHtmlFallbacks() {
+  if (!htmlGo) htmlGo = renderToneAudio(880, 0.28, 0.85);
+  if (!htmlTick) htmlTick = renderToneAudio(620, 0.12, 0.55);
+}
+
+async function playHtmlFallback(kind: "go" | "tick") {
+  ensureHtmlFallbacks();
+  const el = kind === "go" ? htmlGo : htmlTick;
+  if (!el) return;
   try {
-    const buffer = ctx.createBuffer(1, 1, 22050);
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(ctx.destination);
-    source.start(0);
+    el.currentTime = 0;
+    await el.play();
   } catch {
     // ignore
   }
 }
 
-/** Two-tone chime when a full block ends */
+function playOscillator(
+  ctx: AudioContext,
+  opts: { freq: number; duration: number; gain: number; type?: OscillatorType; freqEnd?: number }
+) {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = opts.type ?? "sine";
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  const t0 = ctx.currentTime;
+  osc.frequency.setValueAtTime(opts.freq, t0);
+  if (opts.freqEnd != null) {
+    osc.frequency.setValueAtTime(opts.freqEnd, t0 + opts.duration * 0.4);
+  }
+  gain.gain.setValueAtTime(opts.gain, t0);
+  gain.gain.exponentialRampToValueAtTime(0.001, t0 + opts.duration);
+  osc.start(t0);
+  osc.stop(t0 + opts.duration);
+}
+
+async function withRunningContext(
+  run: (ctx: AudioContext) => void,
+  fallback: "go" | "tick" | "block" | null
+) {
+  const ctx = await resumeAudioContext();
+  if (ctx) {
+    try {
+      run(ctx);
+      return;
+    } catch {
+      // fall through to HTML audio
+    }
+  }
+  if (fallback === "go" || fallback === "tick") {
+    await playHtmlFallback(fallback);
+  } else if (fallback === "block") {
+    await playHtmlFallback("go");
+  }
+}
+
+/**
+ * Call from a user-gesture handler (Start Session, Mark Shot, etc.).
+ * iOS requires an audible play + resumed context during the tap.
+ */
+export function unlockPracticeAudio(): void {
+  setPlaybackAudioSession();
+  void (async () => {
+    const ctx = await resumeAudioContext();
+    ensureHtmlFallbacks();
+    if (ctx) {
+      try {
+        playOscillator(ctx, { freq: 523, duration: 0.12, gain: 0.12, type: "sine" });
+      } catch {
+        // ignore
+      }
+    }
+    await playHtmlFallback("tick");
+  })();
+}
+
 export function playBlockCompleteSound() {
-  withAudioContext(ctx => {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.setValueAtTime(523.25, ctx.currentTime);
-    osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.12);
-    gain.gain.setValueAtTime(0.15, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.35);
-  });
+  void withRunningContext(
+    ctx => {
+      playOscillator(ctx, {
+        freq: 523.25,
+        freqEnd: 659.25,
+        duration: 0.38,
+        gain: 0.22,
+        type: "sine",
+      });
+    },
+    "block"
+  );
 }
 
-/** Single "go" tone when the between-shot rest timer hits zero */
 export function playRestCompleteSound() {
-  withAudioContext(ctx => {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sine";
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.setValueAtTime(880, ctx.currentTime);
-    gain.gain.setValueAtTime(0.22, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.22);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.22);
-  });
+  void withRunningContext(
+    ctx => {
+      playOscillator(ctx, { freq: 880, duration: 0.28, gain: 0.38, type: "sine" });
+    },
+    "go"
+  );
 }
 
-/** Quiet tick for the last few seconds of rest cadence — eyes-off awareness */
 export function playCadenceTick() {
-  withAudioContext(ctx => {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "triangle";
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.setValueAtTime(620, ctx.currentTime);
-    gain.gain.setValueAtTime(0.07, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.005, ctx.currentTime + 0.09);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.1);
-  });
+  void withRunningContext(
+    ctx => {
+      playOscillator(ctx, { freq: 620, duration: 0.1, gain: 0.14, type: "triangle" });
+    },
+    "tick"
+  );
 }
 
 export function vibrateBlockComplete() {
@@ -129,14 +249,17 @@ export function celebrateBlockComplete() {
   vibrateBlockComplete();
 }
 
-/** Rest cadence finished — time for the next shot */
 export function notifyRestComplete() {
   playRestCompleteSound();
   vibrateRestComplete();
 }
 
-/** Last 3 seconds of rest — quiet tick + tiny haptic */
 export function notifyCadenceTick() {
   playCadenceTick();
   vibrateCadenceTick();
+}
+
+/** Resume audio before starting a rest timer (helps iOS between shots) */
+export function primePracticeAudio(): void {
+  void resumeAudioContext();
 }

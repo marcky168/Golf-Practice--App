@@ -31,6 +31,7 @@ import { IntentionPicker, type ShapeType, type TrajectoryType } from "@/componen
 import { ResumePrompt, clearPartialSession, type PartialSession } from "@/components/practice/ResumePrompt";
 import { savePracticeSession, getClubBag } from "@/app/actions";
 import { enrichConfigForSave, timingFromCompletion } from "@/lib/practice/session-save";
+import { unlockPracticeAudio } from "@/lib/practice/feedback";
 import { DELIBERATE_CHECKLIST } from "@/lib/practice/constants";
 import { BlockDrillLibraryList } from "@/components/practice/BlockDrillLibraryList";
 import {
@@ -120,6 +121,7 @@ export default function PracticeBuilderPage() {
               repRecords: undefined,
               blockResults: undefined,
             };
+            unlockPracticeAudio();
             setSessionConfig(fresh);
             setStep("running");
             toast.success("Repeating last session — fresh reps, same plan");
@@ -175,6 +177,7 @@ export default function PracticeBuilderPage() {
   }
 
   function startSession() {
+    unlockPracticeAudio();
     if (!isChecklistComplete || !isIntentionSet) return;
     if (userBag.length === 0) {
       toast.error("Add clubs on your Profile first.");
@@ -226,6 +229,7 @@ export default function PracticeBuilderPage() {
   }
 
   function startLibrarySession() {
+    unlockPracticeAudio();
     if (!canStartLibrary || !selectedPresetId) return;
 
     const config = loadBlockDrillPreset(selectedPresetId, userBag);
@@ -270,6 +274,7 @@ export default function PracticeBuilderPage() {
   }
 
   function handleResume(saved: PartialSession) {
+    unlockPracticeAudio();
     setSessionConfig(saved.config);
     setResumeData(saved);
     if (saved.fixedIntention) {

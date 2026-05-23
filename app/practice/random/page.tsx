@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { ArrowLeft, Shuffle, Play, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { generateRandomSession } from "@/lib/practice/generators";
+import { generateRandomSessionWithWarmup } from "@/lib/practice/generators";
 import { SKILL_CATEGORIES, getYardagePresetsForAreas } from "@/lib/practice/constants";
 import type { SessionConfig, SkillCategory } from "@/lib/practice/types";
 import { SessionRunner } from "@/components/practice/SessionRunner";
@@ -16,6 +16,7 @@ import { SHAPES, TRAJECTORIES, type ShapeType, type TrajectoryType } from "@/com
 import { ResumePrompt, clearPartialSession, type PartialSession } from "@/components/practice/ResumePrompt";
 import { savePracticeSession, getClubBag } from "@/app/actions";
 import { enrichConfigForSave, timingFromCompletion } from "@/lib/practice/session-save";
+import { unlockPracticeAudio } from "@/lib/practice/feedback";
 
 type Intention  = { shape: ShapeType; trajectory: TrajectoryType };
 type BagEntry   = { club: string; carry: number };
@@ -64,7 +65,8 @@ export default function RandomPracticePage() {
   }
 
   function generateAndStart() {
-    const config = generateRandomSession({
+    unlockPracticeAudio();
+    const config = generateRandomSessionWithWarmup({
       durationMinutes: useDuration ? duration : undefined,
       numShots: !useDuration ? numShots : undefined,
       focusAreas: selectedAreas,
@@ -76,7 +78,12 @@ export default function RandomPracticePage() {
     setGeneratedConfig(config);
     setDrillIntentions(config.drills.map(randomIntention));
     setStep("running");
-    toast.success(`Random session generated — ${config.drills.length} varied shots`);
+    const warm = config.warmupShotCount ?? 0;
+    toast.success(
+      warm > 0
+        ? `${warm} warm-up shots (short clubs), then ${config.drills.length - warm} practice shots`
+        : `Random session generated — ${config.drills.length} varied shots`
+    );
   }
 
   async function handleComplete(result: any) {
@@ -111,6 +118,7 @@ export default function RandomPracticePage() {
   }
 
   function handleResume(saved: PartialSession) {
+    unlockPracticeAudio();
     setGeneratedConfig(saved.config);
     setDrillIntentions(saved.drillIntentions ?? []);
     setResumeData(saved);
@@ -290,6 +298,7 @@ export default function RandomPracticePage() {
             <div className="mb-1 font-medium">Rest Between Reps</div>
             <p className="text-xs text-muted-foreground mb-2">
               Brief enforced rests help your brain consolidate each shot before the next.
+              Sounds play on rest timers — tap Start below once to enable on iPhone.
             </p>
             <div className="flex flex-wrap gap-2">
               {[0, 15, 30, 45].map((s) => (
@@ -309,10 +318,10 @@ export default function RandomPracticePage() {
             <CardContent className="pt-5 text-sm">
               <div className="font-medium mb-1">What to expect</div>
               <ul className="text-muted-foreground space-y-1 list-disc pl-5">
-                <li>Every shot will feel different (club, distance, target, shape)</li>
-                <li>No more than one identical club/target in a row</li>
-                <li>Realistic mix of full swings, short game, and putting</li>
-                <li>You’ll be forced to think and commit like on the course</li>
+                <li>Starts with ~10 short-club warm-up shots (putting → wedges)</li>
+                <li>Tap “End warm-up” when ready — then full random practice begins</li>
+                <li>Practice shots vary club, distance, target, and shape</li>
+                <li>Warm-up and practice are clearly labeled during the session</li>
               </ul>
             </CardContent>
           </Card>
