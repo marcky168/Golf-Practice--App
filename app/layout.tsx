@@ -5,7 +5,7 @@ import { Toaster } from "sonner";
 import { PwaRegister } from "@/components/PwaRegister";
 import { AppHeader } from "@/components/AppHeader";
 import { BottomNav } from "@/components/BottomNav";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/supabase/server";
 
 // Clean, highly legible system font stack optimized for mobile outdoors
 const fontClass = "font-sans";
@@ -34,8 +34,7 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
 
   return (
     <html lang="en" suppressHydrationWarning>

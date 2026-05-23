@@ -41,8 +41,8 @@ function calculateCurrentStreak(sessions: any[]): number {
 }
 
 export default async function GolfPracticeOSDashboard() {
-  const supabase = await (await import("@/lib/supabase/server")).createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { getAuthUser } = await import("@/lib/supabase/server");
+  const user = await getAuthUser();
   const sessions = user ? await getUserSessions(50) : [];
 
   // === Compute real stats ===

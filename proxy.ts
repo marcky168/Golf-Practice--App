@@ -1,13 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { updateSession } from "@/lib/supabase/proxy";
+import { updateSession } from "@/lib/supabase/session";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   try {
     const { supabaseResponse, user } = await updateSession(request);
 
     const pathname = request.nextUrl.pathname;
 
-    // Public routes that don't require login
     const isPublicRoute =
       pathname.startsWith("/login") ||
       pathname.startsWith("/auth") ||
@@ -30,10 +29,7 @@ export async function middleware(request: NextRequest) {
 
     return supabaseResponse;
   } catch (err) {
-    // Last-resort safety net so a transient Supabase / edge runtime issue
-    // never serves a hard 500 to a real user. The actual stack will appear
-    // in Vercel function logs for follow-up.
-    console.error("[middleware] uncaught error, passing through:", err);
+    console.error("[proxy] uncaught error, passing through:", err);
     return NextResponse.next({ request });
   }
 }

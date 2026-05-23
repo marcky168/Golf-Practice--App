@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import type { Database } from "@/types/supabase";
+
+type PracticeSessionRow = Database["public"]["Tables"]["practice_sessions"]["Row"];
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,18 +13,22 @@ import { getSessionDurationMinutes } from "@/lib/practice/session-duration";
 
 export default async function HistoryPage() {
   const supabase = await createClient();
+  let sessions: PracticeSessionRow[] = [];
 
-  const { data: sessions, error } = await supabase
-    .from("practice_sessions")
-    .select("*")
-    .order("started_at", { ascending: false })
-    .limit(100);
+  if (supabase) {
+    const { data, error } = await supabase
+      .from("practice_sessions")
+      .select("*")
+      .order("started_at", { ascending: false })
+      .limit(100);
 
-  if (error) {
-    console.error("History fetch error:", error);
+    if (error) {
+      console.error("History fetch error:", error);
+    }
+    sessions = data ?? [];
   }
 
-  const hasSessions = sessions && sessions.length > 0;
+  const hasSessions = sessions.length > 0;
 
   return (
     <div className="min-h-screen bg-background pb-20 max-w-4xl mx-auto px-4 pt-6">

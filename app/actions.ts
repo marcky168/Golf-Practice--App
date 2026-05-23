@@ -8,6 +8,10 @@ import type { ClubEntry } from "@/types/supabase";
 
 export type { ClubEntry };
 
+async function requireSupabaseClient() {
+  return createClient();
+}
+
 export type SaveSessionInput = {
   type: "block" | "random" | "mixed" | "game" | "planned";
   title: string;
@@ -30,7 +34,8 @@ export type SaveSessionInput = {
 };
 
 export async function savePracticeSession(input: SaveSessionInput) {
-  const supabase = await createClient();
+  const supabase = await requireSupabaseClient();
+  if (!supabase) return { error: "Authentication service is not configured." };
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
@@ -71,7 +76,8 @@ export async function savePracticeSession(input: SaveSessionInput) {
 }
 
 export async function updateSessionNotes(sessionId: string, notes: string) {
-  const supabase = await createClient();
+  const supabase = await requireSupabaseClient();
+  if (!supabase) return { error: "Authentication service is not configured." };
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated" };
@@ -91,9 +97,9 @@ export async function updateSessionNotes(sessionId: string, notes: string) {
 }
 
 export async function getUserSessions(limit = 50) {
-  const supabase = await createClient();
+  const supabase = await requireSupabaseClient();
+  if (!supabase) return [];
 
-  // First check if user is authenticated
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
@@ -116,7 +122,8 @@ export async function getUserSessions(limit = 50) {
 }
 
 export async function getPlannedSessions() {
-  const supabase = await createClient();
+  const supabase = await requireSupabaseClient();
+  if (!supabase) return [];
 
   const { data, error } = await supabase
     .from("practice_sessions")
@@ -137,7 +144,8 @@ export async function getPlannedSessions() {
 // =============================================
 
 export async function signUp(email: string, password: string) {
-  const supabase = await createClient();
+  const supabase = await requireSupabaseClient();
+  if (!supabase) return { error: "Authentication service is not configured." };
 
   const { error } = await supabase.auth.signUp({
     email,
@@ -155,7 +163,8 @@ export async function signUp(email: string, password: string) {
 }
 
 export async function signIn(email: string, password: string) {
-  const supabase = await createClient();
+  const supabase = await requireSupabaseClient();
+  if (!supabase) return { error: "Authentication service is not configured." };
 
   const { error } = await supabase.auth.signInWithPassword({
     email,
@@ -171,8 +180,8 @@ export async function signIn(email: string, password: string) {
 }
 
 export async function signOut() {
-  const supabase = await createClient();
-  await supabase.auth.signOut();
+  const supabase = await requireSupabaseClient();
+  if (supabase) await supabase.auth.signOut();
   revalidatePath("/", "layout");
   return { success: true };
 }
@@ -182,7 +191,9 @@ export async function signOut() {
 // =============================================
 
 export async function getClubBag(): Promise<ClubEntry[]> {
-  const supabase = await createClient();
+  const supabase = await requireSupabaseClient();
+  if (!supabase) return [];
+
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
@@ -196,7 +207,9 @@ export async function getClubBag(): Promise<ClubEntry[]> {
 }
 
 export async function saveClubBag(clubBag: ClubEntry[]) {
-  const supabase = await createClient();
+  const supabase = await requireSupabaseClient();
+  if (!supabase) return { error: "Authentication service is not configured." };
+
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated" };
 
