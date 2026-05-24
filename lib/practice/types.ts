@@ -105,6 +105,17 @@ export interface SessionConfig {
   perRepIntentions?: (ShotIntention | null)[];
   blockResults?: BlockResult[];
   repRecords?: RepRecordSnapshot[];
+  /**
+   * Huberman Random Micro-Pause Mode: after ~25 % of practice shots the app
+   * forces a 10-second "Neural Replay Gap" so the motor cortex can consolidate
+   * the previous rep at 20× speed before the next one.
+   */
+  microPauseMode?: boolean;
+  /**
+   * Slow Burn Mode: session-wide flag that tells the golfer to swing at 15 %
+   * speed, forcing conscious mapping of every position in the motor cortex.
+   */
+  slowBurn?: boolean;
 }
 
 export interface PracticeSession {

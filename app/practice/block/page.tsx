@@ -15,6 +15,7 @@ import { SKILL_CATEGORIES, getFocusCuesForSkill, getYardagePresetsForSkill, DELI
 import { getClubBag, type ClubEntry } from "@/app/actions";
 import type { SessionConfig, SkillCategory } from "@/lib/practice/types";
 import { SessionRunner } from "@/components/practice/SessionRunner";
+import { SessionRunnerErrorBoundary } from "@/components/practice/SessionRunnerErrorBoundary";
 import { IntentionPicker, type ShapeType, type TrajectoryType } from "@/components/practice/IntentionPicker";
 import { ResumePrompt, clearPartialSession, type PartialSession } from "@/components/practice/ResumePrompt";
 import { savePracticeSession } from "@/app/actions";
@@ -552,16 +553,18 @@ export default function BlockPracticePage() {
   // ===== RUNNING (reuses shared SessionRunner) =====
   if (step === "running" && sessionConfig) {
     return (
-      <SessionRunner
-        config={sessionConfig}
-        onComplete={handleSessionComplete}
-        onExit={() => setStep("wizard")}
-        restIntervalSeconds={restInterval}
-        fixedIntention={sessionShape && sessionTrajectory ? { shape: sessionShape, trajectory: sessionTrajectory } : undefined}
-        initialRepRecords={resumeData?.repRecords}
-        initialCurrentIndex={resumeData?.currentIndex}
-        initialSessionStartedAt={resumeData?.sessionStartedAt}
-      />
+      <SessionRunnerErrorBoundary onSave={handleSessionComplete} onExit={() => setStep("wizard")}>
+        <SessionRunner
+          config={sessionConfig}
+          onComplete={handleSessionComplete}
+          onExit={() => setStep("wizard")}
+          restIntervalSeconds={restInterval}
+          fixedIntention={sessionShape && sessionTrajectory ? { shape: sessionShape, trajectory: sessionTrajectory } : undefined}
+          initialRepRecords={resumeData?.repRecords}
+          initialCurrentIndex={resumeData?.currentIndex}
+          initialSessionStartedAt={resumeData?.sessionStartedAt}
+        />
+      </SessionRunnerErrorBoundary>
     );
   }
 

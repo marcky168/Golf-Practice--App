@@ -8,7 +8,6 @@ import { getLoggedPracticeMinutes, getSessionDurationMinutes } from "@/lib/pract
 import { WelcomeHint } from "@/components/WelcomeHint";
 import { PartialSessionBanner } from "@/components/PartialSessionBanner";
 import { RepeatLastSessionCard } from "@/components/RepeatLastSessionCard";
-import { RepeatLastMixedCard } from "@/components/RepeatLastMixedCard";
 import { DashboardHero } from "@/components/DashboardHero";
 import { PwaInstallNudge } from "@/components/PwaInstallNudge";
 
@@ -63,12 +62,13 @@ export default async function GolfPracticeOSDashboard() {
   // Current streak calculation
   const streak = calculateCurrentStreak(sessions);
 
-  // Most common session type
-  const typeCounts = sessions.reduce((acc: any, s) => {
-    acc[s.type] = (acc[s.type] || 0) + 1;
+  // Most common session title (specific practice/game, not just the type)
+  const titleCounts = completedSessions.reduce((acc: any, s) => {
+    const key = s.title || s.type;
+    acc[key] = (acc[key] || 0) + 1;
     return acc;
   }, {});
-  const mostCommonType = Object.keys(typeCounts).sort((a, b) => typeCounts[b] - typeCounts[a])[0] || "—";
+  const mostCommonType = Object.keys(titleCounts).sort((a, b) => titleCounts[b] - titleCounts[a])[0] || "—";
 
   const recentSessions = sessions.slice(0, 3);
   return (
@@ -97,8 +97,7 @@ export default async function GolfPracticeOSDashboard() {
         )}
 
         {/* One-tap repeat shortcuts */}
-        {user && <RepeatLastMixedCard />}
-        {user && <RepeatLastSessionCard />}
+{user && <RepeatLastSessionCard />}
 
         {/* Strong Welcome for users with zero sessions */}
         {sessions.length === 0 && (
@@ -207,8 +206,8 @@ export default async function GolfPracticeOSDashboard() {
                   <TrendingUp className="h-5 w-5 text-accent" />
                 </div>
                 <div>
-                  <div className="text-3xl font-semibold capitalize">{mostCommonType}</div>
-                  <div className="text-sm text-muted-foreground">Most Common</div>
+                  <div className="text-base font-semibold leading-snug line-clamp-2">{mostCommonType}</div>
+                  <div className="text-sm text-muted-foreground">Most Practiced</div>
                 </div>
               </div>
             </CardContent>

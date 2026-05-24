@@ -1,19 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ArrowLeft, BookOpen } from "lucide-react";
+import { ArrowLeft, BookOpen, CheckCircle2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { BlockDrillLibraryList } from "@/components/practice/BlockDrillLibraryList";
-import { BLOCK_DRILL_LIBRARY, getDrillPresetAvailability } from "@/lib/practice/block-drills";
-import { getClubBag, type ClubEntry } from "@/app/actions";
+import { loadBlockDrillPreset } from "@/lib/practice/block-drills";
+import { SessionRunner } from "@/components/practice/SessionRunner";
+import { SessionRunnerErrorBoundary } from "@/components/practice/SessionRunnerErrorBoundary";
+import { getClubBag, savePracticeSession, type ClubEntry } from "@/app/actions";
+import { enrichConfigForSave, timingFromCompletion } from "@/lib/practice/session-save";
+import { unlockPracticeAudio } from "@/lib/practice/feedback";
 import { toast } from "sonner";
+import type { SessionConfig } from "@/lib/practice/types";
+
+type Step = "list" | "running" | "complete";
 
 export default function DrillLibraryPage() {
-  const router = useRouter();
+  const [step, setStep] = useState<Step>("list");
   const [userBag, setUserBag] = useState<ClubEntry[]>([]);
   const [bagLoading, setBagLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [sessionConfig, setSessionConfig] = useState<SessionConfig | null>(null);
 
   useEffect(() => {
     getClubBag().then(bag => {
@@ -23,19 +31,88 @@ export default function DrillLibraryPage() {
   }, []);
 
   function startDrill(id: string) {
-    const preset = BLOCK_DRILL_LIBRARY.find(d => d.id === id);
-    if (!preset) return;
-    const { available } = getDrillPresetAvailability(preset, userBag);
-    if (!available) {
+    const config = loadBlockDrillPreset(id, userBag);
+    if (!config) {
       toast.error("Add the required clubs on your Profile to run this drill.");
       return;
     }
-    router.push(`/practice/builder?mode=library&drill=${id}`);
+    unlockPracticeAudio();
+    setSessionConfig(config);
+    setStep("running");
   }
 
+  async function handleComplete(result: any) {
+    if (!sessionConfig) return;
+    const res = await savePracticeSession({
+      type: "block",
+      title: sessionConfig.title,
+      ...timingFromCompletion(result),
+      config: enrichConfigForSave(sessionConfig, {
+        repRecords: result.repRecords,
+        blockResults: result.blockResults ?? [],
+      }),
+      reflection: result.reflection,
+      notes: result.notes,
+    });
+    if (res.success) {
+      setStep("complete");
+      toast.success("Session saved — check History for trends");
+    } else {
+      toast.error("Failed to save session.");
+    }
+  }
+
+  // ── RUNNING ──────────────────────────────────────────────────────────────────
+  if (step === "running" && sessionConfig) {
+    return (
+      <SessionRunnerErrorBoundary onSave={handleComplete} onExit={() => setStep("list")}>
+        <SessionRunner
+          config={sessionConfig}
+          onComplete={handleComplete}
+          onExit={() => setStep("list")}
+          restIntervalSeconds={sessionConfig.cadenceSeconds ?? 0}
+        />
+      </SessionRunnerErrorBoundary>
+    );
+  }
+
+  // ── COMPLETE ─────────────────────────────────────────────────────────────────
+  if (step === "complete") {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <div className="max-w-md w-full text-center">
+          <div className="mx-auto w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mb-6">
+            <CheckCircle2 className="w-9 h-9 text-emerald-600" />
+          </div>
+          <h1 className="text-4xl font-semibold tracking-tighter mb-3">Session Saved</h1>
+          <p className="text-muted-foreground">Block results are in your history trends.</p>
+          <div className="flex flex-col gap-3 mt-10">
+            <Button
+              size="lg"
+              onClick={() => {
+                setStep("list");
+                setSelectedId(null);
+                setSessionConfig(null);
+              }}
+            >
+              Run Another Drill
+            </Button>
+            <Link href="/history">
+              <Button variant="outline" size="lg" className="w-full">View Trends</Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── LIST ─────────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-background pb-20 max-w-2xl mx-auto px-4 pt-6">
-      <Link href="/practice" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6">
+      <Link
+        href="/practice"
+        className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6"
+      >
         <ArrowLeft className="h-4 w-4" /> Back to Practice
       </Link>
 
@@ -43,9 +120,8 @@ export default function DrillLibraryPage() {
         <BookOpen className="h-8 w-8 text-primary" />
         <h1 className="text-3xl font-semibold tracking-tighter">Block Drill Library</h1>
       </div>
-      <p className="text-muted-foreground mb-4">
-        Pre-built block sessions — load into the builder or run from{" "}
-        <Link href="/practice/block" className="underline text-primary">Block Practice</Link>.
+      <p className="text-muted-foreground mb-6">
+        Pre-built sessions — pick a drill and start immediately.
       </p>
 
       {userBag.length === 0 && !bagLoading && (

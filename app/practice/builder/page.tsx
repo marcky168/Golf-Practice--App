@@ -27,6 +27,7 @@ import {
 } from "@/lib/practice/partial-shots";
 import type { BuilderFocus, BuilderPracticeMode, SessionConfig, SwingLength } from "@/lib/practice/types";
 import { SessionRunner } from "@/components/practice/SessionRunner";
+import { SessionRunnerErrorBoundary } from "@/components/practice/SessionRunnerErrorBoundary";
 import { IntentionPicker, type ShapeType, type TrajectoryType } from "@/components/practice/IntentionPicker";
 import { ResumePrompt, clearPartialSession, type PartialSession } from "@/components/practice/ResumePrompt";
 import { savePracticeSession, getClubBag } from "@/app/actions";
@@ -71,6 +72,9 @@ export default function PracticeBuilderPage() {
   const [sessionShape, setSessionShape] = useState<ShapeType | null>(null);
   const [sessionTrajectory, setSessionTrajectory] = useState<TrajectoryType | null>(null);
   const [checklist, setChecklist] = useState<boolean[]>([false, false, false]);
+
+  const [microPauseMode, setMicroPauseMode] = useState(false);
+  const [slowBurn, setSlowBurn] = useState(false);
 
   const [sessionConfig, setSessionConfig] = useState<SessionConfig | null>(null);
   const [resumeData, setResumeData] = useState<PartialSession | null>(null);
@@ -188,7 +192,7 @@ export default function PracticeBuilderPage() {
       return;
     }
 
-    const config = createBuilderSessionConfig({
+    const rawConfig = createBuilderSessionConfig({
       focus,
       clubs: selectedClubs,
       swingLength: showSwingLength
@@ -202,10 +206,15 @@ export default function PracticeBuilderPage() {
       target: target.trim() || undefined,
       userBag,
     });
-    if (!config) {
+    if (!rawConfig) {
       toast.error("Could not build session with your bag clubs.");
       return;
     }
+    const config: SessionConfig = {
+      ...rawConfig,
+      ...(microPauseMode ? { microPauseMode: true } : {}),
+      ...(slowBurn ? { slowBurn: true } : {}),
+    };
     setSessionConfig(config);
     setStep("running");
     saveRepeatableSession(config);
@@ -522,6 +531,55 @@ export default function PracticeBuilderPage() {
             </div>
           </div>
 
+          {/* ── Neuro-training modes ─────────────────────────────── */}
+          <div>
+            <Label className="mb-1 block text-base">Neuro-training modes</Label>
+            <p className="text-xs text-muted-foreground mb-3">
+              Based on Huberman Lab motor-learning protocols — off by default.
+            </p>
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => setMicroPauseMode(v => !v)}
+                className={`w-full text-left px-4 py-3 rounded-xl border transition active:scale-[0.985] ${
+                  microPauseMode ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30" : "bg-card hover:bg-muted"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="font-medium text-sm">
+                    ⏸ Random Neural Micro-Pauses
+                  </div>
+                  <div className={`text-xs font-semibold px-2 py-0.5 rounded-full ${microPauseMode ? "bg-blue-500 text-white" : "bg-muted text-muted-foreground"}`}>
+                    {microPauseMode ? "ON" : "OFF"}
+                  </div>
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  ~25% of shots trigger a 10-second freeze — motor cortex replays the swing at 20× speed
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSlowBurn(v => !v)}
+                className={`w-full text-left px-4 py-3 rounded-xl border transition active:scale-[0.985] ${
+                  slowBurn ? "border-orange-400 bg-orange-50 dark:bg-orange-950/30" : "bg-card hover:bg-muted"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="font-medium text-sm">
+                    🔥 Slow Burn Mode
+                  </div>
+                  <div className={`text-xs font-semibold px-2 py-0.5 rounded-full ${slowBurn ? "bg-orange-500 text-white" : "bg-muted text-muted-foreground"}`}>
+                    {slowBurn ? "ON" : "OFF"}
+                  </div>
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  Swing at 15% speed — forces the motor cortex to consciously map every position
+                </div>
+              </button>
+            </div>
+          </div>
+
           <div>
             <Label className="mb-2 block">Block vs random</Label>
             <div className="space-y-2">
@@ -649,22 +707,24 @@ export default function PracticeBuilderPage() {
 
   if (step === "running" && sessionConfig) {
     return (
-      <SessionRunner
-        config={sessionConfig}
-        onComplete={handleSessionComplete}
-        onExit={() => setStep("wizard")}
-        restIntervalSeconds={sessionConfig.cadenceSeconds ?? 0}
-        fixedIntention={
-          sessionConfig.practiceMode === "random"
-            ? undefined
-            : sessionShape && sessionTrajectory
-              ? { shape: sessionShape, trajectory: sessionTrajectory }
-              : undefined
-        }
-        initialRepRecords={resumeData?.repRecords}
-        initialCurrentIndex={resumeData?.currentIndex}
-        initialSessionStartedAt={resumeData?.sessionStartedAt}
-      />
+      <SessionRunnerErrorBoundary onSave={handleSessionComplete} onExit={() => setStep("wizard")}>
+        <SessionRunner
+          config={sessionConfig}
+          onComplete={handleSessionComplete}
+          onExit={() => setStep("wizard")}
+          restIntervalSeconds={sessionConfig.cadenceSeconds ?? 0}
+          fixedIntention={
+            sessionConfig.practiceMode === "random"
+              ? undefined
+              : sessionShape && sessionTrajectory
+                ? { shape: sessionShape, trajectory: sessionTrajectory }
+                : undefined
+          }
+          initialRepRecords={resumeData?.repRecords}
+          initialCurrentIndex={resumeData?.currentIndex}
+          initialSessionStartedAt={resumeData?.sessionStartedAt}
+        />
+      </SessionRunnerErrorBoundary>
     );
   }
 

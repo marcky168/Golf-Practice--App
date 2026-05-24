@@ -97,15 +97,13 @@ function parseDrillDistance(drill: Drill): number {
 }
 
 const WARMUP_CATEGORIES = new Set<SkillCategory>([
-  "putting",
   "short-game",
   "wedges",
   "short-irons",
-  "bunker",
   "tempo",
 ]);
 
-const DEFAULT_WARMUP_AREAS: SkillCategory[] = ["putting", "wedges", "short-game", "short-irons"];
+const DEFAULT_WARMUP_AREAS: SkillCategory[] = ["wedges", "short-game", "short-irons"];
 
 /** Short-club warm-up block before random practice — sorted shortest distance first */
 export function generateRandomWarmupDrills(options: {
@@ -171,9 +169,6 @@ export function generateRandomWarmupDrills(options: {
   return drills;
 }
 
-const WARMUP_FOCUS_CUE =
-  "Warm-up: smooth tempo with short clubs. Tap “End warm-up” when your body feels ready.";
-
 export type WarmupAttachOptions = {
   warmupShots?: number;
   userBag?: BagEntry[];
@@ -212,16 +207,11 @@ export function attachWarmupToSession(
     perRepIntentions = [...Array(warmup.length).fill(null), ...perRepIntentions];
   }
 
-  const focusCue = config.focusCue
-    ? `${WARMUP_FOCUS_CUE} Then: ${config.focusCue}`
-    : WARMUP_FOCUS_CUE;
-
   return {
     ...config,
     drills: [...warmup, ...practiceDrills],
     warmupShotCount: warmup.length,
     perRepIntentions,
-    focusCue,
   };
 }
 

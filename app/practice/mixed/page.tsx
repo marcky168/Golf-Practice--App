@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { ArrowLeft, TrendingUp, Info, Play } from "lucide-react";
 import { toast } from "sonner";
 import { SessionRunner } from "@/components/practice/SessionRunner";
+import { SessionRunnerErrorBoundary } from "@/components/practice/SessionRunnerErrorBoundary";
 import { generateMixedSession } from "@/lib/practice/generators";
 import { SKILL_CATEGORIES, getYardagePresetsForAreas } from "@/lib/practice/constants";
 import type { SkillCategory, SessionConfig } from "@/lib/practice/types";
@@ -329,15 +330,17 @@ export default function MixedSessionPage() {
   // === RUNNING ===
   if (step === "running" && generatedConfig) {
     return (
-      <SessionRunner
-        config={generatedConfig}
-        onComplete={handleComplete}
-        onExit={() => setStep("config")}
-        restIntervalSeconds={restInterval}
-        initialRepRecords={resumeData?.repRecords}
-        initialCurrentIndex={resumeData?.currentIndex}
-        initialSessionStartedAt={resumeData?.sessionStartedAt}
-      />
+      <SessionRunnerErrorBoundary onSave={handleComplete} onExit={() => setStep("config")}>
+        <SessionRunner
+          config={generatedConfig}
+          onComplete={handleComplete}
+          onExit={() => setStep("config")}
+          restIntervalSeconds={restInterval}
+          initialRepRecords={resumeData?.repRecords}
+          initialCurrentIndex={resumeData?.currentIndex}
+          initialSessionStartedAt={resumeData?.sessionStartedAt}
+        />
+      </SessionRunnerErrorBoundary>
     );
   }
 

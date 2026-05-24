@@ -67,7 +67,7 @@ interface RepRecord {
   errorCorrection?: RepErrorCorrection;
 }
 
-type Phase = 'running' | 'rest' | 'block-review' | 'reflection' | 'replay';
+type Phase = 'running' | 'rest' | 'block-review' | 'reflection' | 'replay' | 'micro-pause';
 
 export function SessionRunner({
   config,
@@ -94,6 +94,10 @@ export function SessionRunner({
   const [restSecondsLeft, setRestSecondsLeft] = useState(0);
   const router = useRouter();
   const restTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const microPauseTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const microPauseNextRef = useRef<(() => void) | null>(null);
+  const [microPauseSecondsLeft, setMicroPauseSecondsLeft] = useState(10);
+  const warned90MinRef = useRef(false);
   const pendingResultRef = useRef<any>(null);
   const pendingNavRef = useRef<(() => void) | null>(null);
 
@@ -142,6 +146,11 @@ export function SessionRunner({
     const interval = setInterval(() => {
       const now = Date.now();
       const realElapsed = timerStartTime ? Math.floor((now - timerStartTime) / 1000) : 0;
+      // 90-minute cognitive fatigue warning (Ultradian Rhythm ceiling)
+      if (!warned90MinRef.current && realElapsed >= 90 * 60) {
+        warned90MinRef.current = true;
+        toast.warning('90-minute mark — sloppy reps are counterproductive. Wrap up when ready.');
+      }
       if (isCountdown) {
         const remaining = Math.max(0, config.durationMinutes * 60 - realElapsed);
         setTimeLeft(remaining);
@@ -249,7 +258,10 @@ export function SessionRunner({
   }
 
   useEffect(() => {
-    return () => { if (restTimerRef.current) clearInterval(restTimerRef.current); };
+    return () => {
+      if (restTimerRef.current) clearInterval(restTimerRef.current);
+      if (microPauseTimerRef.current) clearInterval(microPauseTimerRef.current);
+    };
   }, []);
 
   // Intention logic — perRepIntentions (random mode) overrides fixed session intention
@@ -263,6 +275,28 @@ export function SessionRunner({
   const activeShape = skipIntention ? undefined : (presetIntention?.shape ?? pendingShape ?? undefined);
   const activeTrajectory = skipIntention ? undefined : (presetIntention?.trajectory ?? pendingTrajectory ?? undefined);
   const intentionReady = skipIntention || !!presetIntention || (pendingShape !== null && pendingTrajectory !== null);
+
+  function triggerMicroPause(onDone: () => void) {
+    setMicroPauseSecondsLeft(10);
+    microPauseNextRef.current = onDone;
+    setPhase('micro-pause');
+    microPauseTimerRef.current = setInterval(() => {
+      setMicroPauseSecondsLeft(s => {
+        if (s <= 1) {
+          clearInterval(microPauseTimerRef.current!);
+          microPauseTimerRef.current = null;
+          // Fire onDone asynchronously so we're not calling setState during setState
+          setTimeout(() => {
+            const next = microPauseNextRef.current;
+            microPauseNextRef.current = null;
+            next?.();
+          }, 0);
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
+  }
 
   function completeCurrentRep(rating?: number) {
     if (!intentionReady) return;
@@ -283,20 +317,36 @@ export function SessionRunner({
     const finishedBlock = isMultiBlock && next > 0 && next % ballsPerBlock === 0;
     const finishedSession = next >= totalSteps;
 
-    if (finishedBlock && isMultiBlock) {
-      celebrateBlockComplete();
-      setReviewBlockIndex(currentBlockIndex);
-      setPhase('block-review');
-      return;
+    // Advance logic extracted so micro-pause can defer it
+    function advance() {
+      if (finishedBlock && isMultiBlock) {
+        celebrateBlockComplete();
+        setReviewBlockIndex(currentBlockIndex);
+        setPhase('block-review');
+        return;
+      }
+      if (finishedSession) {
+        stopTimer();
+        goToReflection();
+      } else if (cadenceSeconds > 0) {
+        startRest(next);
+      } else {
+        setCurrentIndex(next);
+      }
     }
 
-    if (finishedSession) {
-      stopTimer();
-      goToReflection();
-    } else if (cadenceSeconds > 0) {
-      startRest(next);
+    // Huberman Random Neural Micro-Pause (~25 % of practice shots)
+    const shouldMicroPause =
+      config.microPauseMode &&
+      !isWarmupIndex(currentIndex) &&
+      !finishedSession &&
+      !finishedBlock &&
+      Math.random() < 0.25;
+
+    if (shouldMicroPause) {
+      triggerMicroPause(advance);
     } else {
-      setCurrentIndex(next);
+      advance();
     }
   }
 
@@ -509,6 +559,41 @@ export function SessionRunner({
     );
   }
 
+  // ── NEURAL MICRO-PAUSE ──────────────────────────────────────────────────────
+  if (phase === 'micro-pause') {
+    return (
+      <div className="min-h-screen bg-[#080f1a] text-white flex flex-col items-center justify-center px-6 text-center">
+        {/* Pulsing brain icon */}
+        <div className="w-20 h-20 rounded-full bg-blue-500/15 flex items-center justify-center mb-8 animate-pulse">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-10 h-10 text-blue-400">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15M14.25 3.104c.251.023.501.05.75.082M19.8 15a2.25 2.25 0 01.45 1.317C20.25 17.919 18.796 20 16.5 20H7.5c-2.296 0-3.75-2.081-3.75-3.683A2.25 2.25 0 014.2 15m15.6 0H4.2" />
+          </svg>
+        </div>
+
+        <div className="text-[10px] tracking-[4px] text-blue-400/70 mb-3 uppercase font-semibold">
+          Neural Replay Gap
+        </div>
+        <h2 className="text-3xl font-semibold tracking-tighter mb-3">Freeze &amp; Replay</h2>
+        <p className="text-white/55 text-sm mb-10 max-w-xs leading-relaxed">
+          Your motor cortex is replaying that swing at 20× speed. Stand still — this is a free rep.
+        </p>
+
+        <div className="text-[96px] font-semibold tabular-nums leading-none tracking-tighter mb-3 text-blue-400">
+          {microPauseSecondsLeft}
+        </div>
+
+        <div className="w-48 h-1 bg-white/10 rounded-full mb-10">
+          <div
+            className="h-full bg-blue-400/60 rounded-full transition-all duration-1000"
+            style={{ width: `${((10 - microPauseSecondsLeft) / 10) * 100}%` }}
+          />
+        </div>
+
+        <p className="text-[11px] text-white/25 tracking-wide">— Huberman Lab Motor Learning Protocol</p>
+      </div>
+    );
+  }
+
   // ── REST (shot cadence timer) ───────────────────────────────────────────────
   if (phase === 'rest') {
     const nextDrill = config.drills[currentIndex + 1];
@@ -673,6 +758,17 @@ export function SessionRunner({
         </div>
 
         <div className='flex-1 flex flex-col items-center justify-center px-4 max-w-xl mx-auto w-full text-center'>
+          {config.slowBurn && (
+            <div className="w-full max-w-md mb-4 rounded-2xl border border-orange-300/60 bg-orange-50/80 dark:bg-orange-950/30 dark:border-orange-700/50 px-4 py-3 text-center">
+              <div className="text-[10px] font-bold tracking-[0.2em] uppercase text-orange-700 dark:text-orange-400 mb-0.5">
+                Slow Burn Active
+              </div>
+              <div className="text-sm text-orange-800 dark:text-orange-300">
+                Swing at 15 % speed — consciously map every position
+              </div>
+            </div>
+          )}
+
           {warmupShotCount > 0 && (
             <div
               className={
@@ -721,28 +817,30 @@ export function SessionRunner({
             )}
           </div>
 
-          <div className='w-full max-w-md mb-10'>
-            <div className='text-xs uppercase tracking-widest text-muted-foreground mb-2'>FOCUS CUE</div>
-            {!isEditingCue ? (
-              <button
-                onClick={() => setIsEditingCue(true)}
-                className='w-full text-left px-6 py-4 bg-card border rounded-2xl text-xl font-medium active:bg-muted'
-              >
-                {liveFocusCue}
-              </button>
-            ) : (
-              <div className='flex gap-2'>
-                <input
-                  value={liveFocusCue}
-                  onChange={e => setLiveFocusCue(e.target.value)}
-                  className='flex-1 h-14 rounded-xl border bg-card px-5 text-lg'
-                  autoFocus
-                />
-                <Button onClick={() => setIsEditingCue(false)} size='lg'>Done</Button>
-              </div>
-            )}
-            <p className='text-[10px] text-muted-foreground mt-2'>Tap the cue to change it anytime</p>
-          </div>
+          {!isInWarmup && (
+            <div className='w-full max-w-md mb-10'>
+              <div className='text-xs uppercase tracking-widest text-muted-foreground mb-2'>FOCUS CUE</div>
+              {!isEditingCue ? (
+                <button
+                  onClick={() => setIsEditingCue(true)}
+                  className='w-full text-left px-6 py-4 bg-card border rounded-2xl text-xl font-medium active:bg-muted'
+                >
+                  {liveFocusCue}
+                </button>
+              ) : (
+                <div className='flex gap-2'>
+                  <input
+                    value={liveFocusCue}
+                    onChange={e => setLiveFocusCue(e.target.value)}
+                    className='flex-1 h-14 rounded-xl border bg-card px-5 text-lg'
+                    autoFocus
+                  />
+                  <Button onClick={() => setIsEditingCue(false)} size='lg'>Done</Button>
+                </div>
+              )}
+              <p className='text-[10px] text-muted-foreground mt-2'>Tap the cue to change it anytime</p>
+            </div>
+          )}
 
           <div className='w-full max-w-md mb-6'>
             {skipIntention ? (

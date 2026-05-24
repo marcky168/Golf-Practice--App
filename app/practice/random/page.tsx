@@ -12,6 +12,7 @@ import { generateRandomSessionWithWarmup } from "@/lib/practice/generators";
 import { SKILL_CATEGORIES, getYardagePresetsForAreas } from "@/lib/practice/constants";
 import type { SessionConfig, SkillCategory } from "@/lib/practice/types";
 import { SessionRunner } from "@/components/practice/SessionRunner";
+import { SessionRunnerErrorBoundary } from "@/components/practice/SessionRunnerErrorBoundary";
 import { SHAPES, TRAJECTORIES, type ShapeType, type TrajectoryType } from "@/components/practice/IntentionPicker";
 import { ResumePrompt, clearPartialSession, type PartialSession } from "@/components/practice/ResumePrompt";
 import { savePracticeSession, getClubBag } from "@/app/actions";
@@ -347,16 +348,18 @@ export default function RandomPracticePage() {
   // ===== RUNNING (uses shared SessionRunner) =====
   if (step === "running" && generatedConfig) {
     return (
-      <SessionRunner
-        config={generatedConfig}
-        onComplete={handleComplete}
-        onExit={() => setStep("config")}
-        drillIntentions={drillIntentions}
-        restIntervalSeconds={restInterval}
-        initialRepRecords={resumeData?.repRecords}
-        initialCurrentIndex={resumeData?.currentIndex}
-        initialSessionStartedAt={resumeData?.sessionStartedAt}
-      />
+      <SessionRunnerErrorBoundary onSave={handleComplete} onExit={() => setStep("config")}>
+        <SessionRunner
+          config={generatedConfig}
+          onComplete={handleComplete}
+          onExit={() => setStep("config")}
+          drillIntentions={drillIntentions}
+          restIntervalSeconds={restInterval}
+          initialRepRecords={resumeData?.repRecords}
+          initialCurrentIndex={resumeData?.currentIndex}
+          initialSessionStartedAt={resumeData?.sessionStartedAt}
+        />
+      </SessionRunnerErrorBoundary>
     );
   }
 
