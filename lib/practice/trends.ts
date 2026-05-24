@@ -2,10 +2,11 @@ import type {
   BlockResult,
   BuilderFocus,
   CorrectionAnswer,
-  RepErrorCorrection,
+  ErrorCorrectionQuestionKey,
   RepRecordSnapshot,
   SessionConfig,
 } from "./types";
+import { isCorrectionAnswer } from "./types";
 
 export type CorrectionTotals = Record<CorrectionAnswer, number>;
 
@@ -17,21 +18,21 @@ export type CorrectionSummary = {
   totalAnswered: number;
 };
 
-const CORRECTION_KEYS: (keyof RepErrorCorrection)[] = [
+const CORRECTION_KEYS: ErrorCorrectionQuestionKey[] = [
   "startedOnLine",
   "trajectoryMatch",
   "hitIntendedShot",
   "focusCueMatch",
 ];
 
-const CORRECTION_LABELS: Record<keyof RepErrorCorrection, string> = {
+const CORRECTION_LABELS: Record<ErrorCorrectionQuestionKey, string> = {
   startedOnLine: "Started on intended line",
   trajectoryMatch: "Matched trajectory",
   hitIntendedShot: "Hit the shot intended",
   focusCueMatch: "Committed to focus cue",
 };
 
-export function correctionLabel(key: keyof RepErrorCorrection): string {
+export function correctionLabel(key: ErrorCorrectionQuestionKey): string {
   return CORRECTION_LABELS[key];
 }
 
@@ -42,7 +43,7 @@ function emptyTotals(): CorrectionTotals {
 /** Aggregate error-correction answers across an array of rep records */
 export function summarizeErrorCorrection(reps: RepRecordSnapshot[]): CorrectionSummary {
   const summary: CorrectionSummary = { totalAnswered: 0 };
-  const totals: Partial<Record<keyof RepErrorCorrection, CorrectionTotals>> = {};
+  const totals: Partial<Record<ErrorCorrectionQuestionKey, CorrectionTotals>> = {};
   let anyAnswered = 0;
 
   for (const r of reps) {
@@ -51,7 +52,7 @@ export function summarizeErrorCorrection(reps: RepRecordSnapshot[]): CorrectionS
     let answeredThisRep = false;
     for (const key of CORRECTION_KEYS) {
       const ans = ec[key];
-      if (!ans) continue;
+      if (!isCorrectionAnswer(ans)) continue;
       const bucket = totals[key] ?? emptyTotals();
       bucket[ans] += 1;
       totals[key] = bucket;
@@ -71,9 +72,9 @@ export function summarizeErrorCorrection(reps: RepRecordSnapshot[]): CorrectionS
 /** Pick the single biggest fix-this-next-block insight from a block's reps */
 export function dominantBlockMiss(
   reps: RepRecordSnapshot[]
-): { key: keyof RepErrorCorrection; label: string; missCount: number; total: number } | null {
+): { key: ErrorCorrectionQuestionKey; label: string; missCount: number; total: number } | null {
   const summary = summarizeErrorCorrection(reps);
-  let best: { key: keyof RepErrorCorrection; missCount: number; total: number } | null = null;
+  let best: { key: ErrorCorrectionQuestionKey; missCount: number; total: number } | null = null;
 
   for (const key of CORRECTION_KEYS) {
     const totals = summary[key];
@@ -210,7 +211,7 @@ export function repsForBlock(
 }
 
 export type ErrorCorrectionTrendRow = {
-  key: keyof RepErrorCorrection;
+  key: ErrorCorrectionQuestionKey;
   label: string;
   yes: number;
   partial: number;

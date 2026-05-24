@@ -61,6 +61,17 @@ export interface BlockResult {
 
 export type CorrectionAnswer = "yes" | "partial" | "no";
 
+/** Rest-timer fields scored as yes / partial / no */
+export type ErrorCorrectionQuestionKey =
+  | "startedOnLine"
+  | "trajectoryMatch"
+  | "hitIntendedShot"
+  | "focusCueMatch";
+
+export function isCorrectionAnswer(value: unknown): value is CorrectionAnswer {
+  return value === "yes" || value === "partial" || value === "no";
+}
+
 export interface RepErrorCorrection {
   /** Ball started on intended shape / line */
   startedOnLine?: CorrectionAnswer;

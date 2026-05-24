@@ -1,12 +1,17 @@
 import { correctionLabel, type CorrectionTotals } from "./trends";
-import type { CorrectionAnswer, RepErrorCorrection, RepRecordSnapshot } from "./types";
+import {
+  isCorrectionAnswer,
+  type CorrectionAnswer,
+  type ErrorCorrectionQuestionKey,
+  type RepRecordSnapshot,
+} from "./types";
 
 export type AdaptationSignal = {
   repNumber: number;
   club?: string;
   shape?: string;
   trajectory?: string;
-  field: keyof RepErrorCorrection;
+  field: ErrorCorrectionQuestionKey;
   answer: Exclude<CorrectionAnswer, "yes">;
   label: string;
 };
@@ -21,14 +26,14 @@ export type ErrorLogSummary = {
   recentSignals: AdaptationSignal[];
 };
 
-const SIGNAL_FIELDS: (keyof RepErrorCorrection)[] = [
+const SIGNAL_FIELDS: ErrorCorrectionQuestionKey[] = [
   "startedOnLine",
   "trajectoryMatch",
   "hitIntendedShot",
   "focusCueMatch",
 ];
 
-function isSignalAnswer(a?: CorrectionAnswer): a is Exclude<CorrectionAnswer, "yes"> {
+function isSignalAnswer(a: CorrectionAnswer): a is Exclude<CorrectionAnswer, "yes"> {
   return a === "partial" || a === "no";
 }
 
@@ -42,7 +47,7 @@ export function computeErrorLogSummary(reps: RepRecordSnapshot[]): ErrorLogSumma
     if (!ec) continue;
     for (const field of SIGNAL_FIELDS) {
       const ans = ec[field];
-      if (!ans) continue;
+      if (!isCorrectionAnswer(ans)) continue;
       totals[ans] += 1;
       if (isSignalAnswer(ans)) {
         signals.push({

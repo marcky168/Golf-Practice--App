@@ -1,9 +1,9 @@
 "use client";
 
 import { computeErrorLogSummary } from "@/lib/practice/error-log";
-import type { RepRecordSnapshot, RepErrorCorrection } from "@/lib/practice/types";
+import type { RepRecordSnapshot, ErrorCorrectionQuestionKey } from "@/lib/practice/types";
 
-const COACHING_CUES: Partial<Record<keyof RepErrorCorrection, string>> = {
+const COACHING_CUES: Partial<Record<ErrorCorrectionQuestionKey, string>> = {
   startedOnLine:   "Next shot: pick a tighter start line and check face angle at address",
   trajectoryMatch: "Next shot: commit to your finish height before you swing",
   hitIntendedShot: "Next shot: full visual of the complete shot before stepping in",
@@ -18,13 +18,13 @@ export function ErrorLogPanel({ reps }: { reps: RepRecordSnapshot[] }) {
   if (summary.adaptationSignals === 0) return null;
 
   // Find the field that's showing up most in recent signals → coaching cue
-  const fieldCounts = summary.recentSignals.reduce<Partial<Record<keyof RepErrorCorrection, number>>>(
+  const fieldCounts = summary.recentSignals.reduce<Partial<Record<ErrorCorrectionQuestionKey, number>>>(
     (acc, s) => { acc[s.field] = (acc[s.field] ?? 0) + 1; return acc; },
     {}
   );
   const topField = (
     Object.entries(fieldCounts).sort(([, a], [, b]) => b - a)[0]?.[0]
-  ) as keyof RepErrorCorrection | undefined;
+  ) as ErrorCorrectionQuestionKey | undefined;
   const coachingCue = topField ? COACHING_CUES[topField] : undefined;
 
   return (

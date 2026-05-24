@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { updateSessionNotes } from "@/app/actions";
 import { getSessionDurationMinutes } from "@/lib/practice/session-duration";
 import { summarizeErrorCorrection, correctionLabel } from "@/lib/practice/trends";
-import type { RepErrorCorrection, RepRecordSnapshot } from "@/lib/practice/types";
+import type { ErrorCorrectionQuestionKey, RepRecordSnapshot } from "@/lib/practice/types";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
@@ -291,7 +291,7 @@ function ErrorCorrectionDetails({ reps }: { reps: RepRecordSnapshot[] }) {
   const summary = summarizeErrorCorrection(reps);
   if (summary.totalAnswered === 0) return null;
 
-  const rows: Array<{ key: keyof RepErrorCorrection; totals: { yes: number; partial: number; no: number } }> = [];
+  const rows: Array<{ key: ErrorCorrectionQuestionKey; totals: { yes: number; partial: number; no: number } }> = [];
   (["startedOnLine", "trajectoryMatch", "hitIntendedShot", "focusCueMatch"] as const).forEach(key => {
     const totals = summary[key];
     if (totals) rows.push({ key, totals });
