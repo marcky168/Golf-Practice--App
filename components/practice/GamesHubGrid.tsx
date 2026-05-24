@@ -26,7 +26,7 @@ const scoreLabel: Record<string, (score: number) => string> = {
         : s >= 5
           ? "🔥 5 in a row ✓"
           : `Best streak: ${s}`,
-  "random-9": (s) => `${s.toFixed(1)} / 5 avg feel`,
+  "random-3-hole": (s) => `${s.toFixed(1)} / 5 avg feel`,
   "arena-3-hole": (s) => (s === 6 ? "6 / 6 — Perfect 🏆" : `${s} / 6 hits`),
   "chip-ladder": (s) => `${s} / 60 pts`,
   "landing-zone-8": (s) => `${s} / 40 pts`,

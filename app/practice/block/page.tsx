@@ -21,6 +21,7 @@ import { ResumePrompt, clearPartialSession, type PartialSession } from "@/compon
 import { savePracticeSession } from "@/app/actions";
 import { enrichConfigForSave, timingFromCompletion } from "@/lib/practice/session-save";
 import { unlockPracticeAudio } from "@/lib/practice/feedback";
+import { PreSessionRating } from "@/components/practice/PreSessionRating";
 import { NeuroTrainingToggles, neuroFlagsFromState } from "@/components/practice/NeuroTrainingToggles";
 import { BlockDrillLibraryList } from "@/components/practice/BlockDrillLibraryList";
 import {
@@ -29,7 +30,7 @@ import {
   presetNeedsIntention,
 } from "@/lib/practice/block-drills";
 
-type FlowStep = "wizard" | "running" | "complete";
+type FlowStep = "wizard" | "pre-session" | "running" | "complete";
 type EntryMode = "custom" | "library";
 
 export default function BlockPracticePage() {
@@ -145,7 +146,7 @@ export default function BlockPracticePage() {
     }
 
     setSessionConfig({ ...config, ...neuroFlagsFromState(microPauseMode, slowBurn) });
-    setStep("running");
+    setStep("pre-session");
     toast.success(`Block session started — ${reps} reps`);
   }
 
@@ -161,7 +162,7 @@ export default function BlockPracticePage() {
 
     setSessionConfig({ ...config, ...neuroFlagsFromState(microPauseMode, slowBurn) });
     setRestInterval(config.cadenceSeconds ?? 0);
-    setStep("running");
+    setStep("pre-session");
     const total = (config.ballsPerBlock ?? 0) * (config.numBlocks ?? 0) || config.drills.length;
     toast.success(`Started — ${total} shots`);
   }
@@ -557,6 +558,18 @@ export default function BlockPracticePage() {
           )}
         </div>
       </div>
+    );
+  }
+
+  if (step === "pre-session" && sessionConfig) {
+    return (
+      <PreSessionRating
+        onComplete={(energy, focus) => {
+          setSessionConfig(prev => prev ? { ...prev, preSessionState: { energy, focus } } : prev);
+          setStep("running");
+        }}
+        onSkip={() => setStep("running")}
+      />
     );
   }
 

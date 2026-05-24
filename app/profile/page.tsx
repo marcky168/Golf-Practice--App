@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { getUserSessions, getClubBag, saveClubBag, signOut, type ClubEntry } from "@/app/actions";
 import { getLoggedPracticeMinutes } from "@/lib/practice/session-duration";
+import { practiceModeLabel } from "@/lib/practice/session-type-label";
 import {
   User, LogOut, Target, Trophy, Clock, TrendingUp,
   Save, Plus, Trash2, Loader2, Check, Pencil, ChevronUp,
@@ -74,14 +75,18 @@ export default function ProfilePage() {
       if (user) {
         setEmail(user.email ?? null);
         const sessions = await getUserSessions(100);
+        const practiceSessions = sessions.filter(s => s.type !== "planned");
         const typeCounts: Record<string, number> = {};
-        sessions.forEach(s => { typeCounts[s.type] = (typeCounts[s.type] || 0) + 1; });
+        practiceSessions.forEach(s => {
+          const label = practiceModeLabel(s);
+          typeCounts[label] = (typeCounts[label] ?? 0) + 1;
+        });
         const mostCommon = Object.keys(typeCounts).sort((a, b) => typeCounts[b] - typeCounts[a])[0] || "—";
         setStats({
-          total:      sessions.length,
-          streak:     calculateStreak(sessions),
-          hours:      Math.round((getLoggedPracticeMinutes(sessions) / 60) * 10) / 10,
-          mostCommon: mostCommon.charAt(0).toUpperCase() + mostCommon.slice(1),
+          total:      practiceSessions.length,
+          streak:     calculateStreak(practiceSessions),
+          hours:      Math.round((getLoggedPracticeMinutes(practiceSessions) / 60) * 10) / 10,
+          mostCommon,
         });
       }
       setLoadingStats(false);

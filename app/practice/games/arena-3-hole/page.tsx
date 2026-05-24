@@ -87,15 +87,14 @@ function pickClub(
 }
 
 function generateHoles(bag: BagEntry[]): HoleConfig[] {
-  const driver  = pickClub(bag, 999, "Driver");
+  const driver   = pickClub(bag, 999, "Driver");
   const approach = pickClub(bag, 155, "7-Iron");
   const par3Club = pickClub(bag, 170, "6-Iron");
-  const layup   = pickClub(bag, 215, "3-Wood");
-  const wedge   = pickClub(bag, 95,  "SW");
+  const layup    = pickClub(bag, 215, "3-Wood");
+  const wedge    = pickClub(bag, 95,  "SW");
 
-  return [
+  const templates: Omit<HoleConfig, "holeNumber">[] = [
     {
-      holeNumber: 1,
       par: 4,
       scenario: "Dogleg right. Fairway bunker guards the corner. Shape it away from trouble.",
       shots: [
@@ -104,7 +103,6 @@ function generateHoles(bag: BagEntry[]): HoleConfig[] {
       ],
     },
     {
-      holeNumber: 2,
       par: 3,
       scenario: "Water front and right. Middle of the green is the only play. Commit.",
       shots: [
@@ -112,7 +110,6 @@ function generateHoles(bag: BagEntry[]): HoleConfig[] {
       ],
     },
     {
-      holeNumber: 3,
       par: 5,
       scenario: "Uphill into the breeze. Lay up smart — then trust your scoring wedge.",
       shots: [
@@ -122,6 +119,11 @@ function generateHoles(bag: BagEntry[]): HoleConfig[] {
       ],
     },
   ];
+
+  // Shuffle hole order every round so the player can't mentally prepare
+  return [...templates]
+    .sort(() => Math.random() - 0.5)
+    .map((t, i) => ({ ...t, holeNumber: i + 1 }));
 }
 
 function arenaRating(hits: number, total: number): { label: string; className: string } {

@@ -162,6 +162,77 @@ export function computePreSessionCorrelation(sessions: SessionRow[]): PreSession
     .sort((a, b) => a.energyLevel - b.energyLevel);
 }
 
+// ── Trajectory weak spots ─────────────────────────────────────────────────────
+
+export function computeWeakSpotsByTrajectory(sessions: SessionRow[]): WeakSpotRow[] {
+  return buildWeakSpots(sessions, r => r.trajectory ?? null, k => k, 5);
+}
+
+// ── Block consistency trend ───────────────────────────────────────────────────
+
+export type BlockConsistencyRow = {
+  date: string;
+  avgConsistency: number;
+  sessionTitle: string;
+};
+
+export function computeBlockConsistencyTrend(sessions: SessionRow[]): BlockConsistencyRow[] {
+  const rows: BlockConsistencyRow[] = [];
+  for (const session of sessions) {
+    const blocks = session.config?.blockResults ?? [];
+    const scored = blocks.filter(b => b.consistency != null);
+    if (scored.length === 0) continue;
+    const avg = scored.reduce((s, b) => s + (b.consistency ?? 0), 0) / scored.length;
+    rows.push({
+      date: new Date(session.started_at).toISOString().split("T")[0],
+      avgConsistency: Math.round(avg * 10) / 10,
+      sessionTitle: session.config?.title ?? "Block session",
+    });
+  }
+  return rows.slice(-12); // last 12 block sessions
+}
+
+// ── Least-practiced clubs ─────────────────────────────────────────────────────
+
+export type UnpracticedClub = {
+  club: string;
+  daysSinceLastSeen: number;
+  totalReps: number;
+};
+
+export function computeLeastPracticedClubs(
+  sessions: SessionRow[],
+  bagClubs: string[]
+): UnpracticedClub[] {
+  if (bagClubs.length === 0) return [];
+
+  const lastSeen = new Map<string, number>();
+  const repCounts = new Map<string, number>();
+
+  for (const session of sessions) {
+    const date = new Date(session.started_at).getTime();
+    for (const rep of session.config?.repRecords ?? []) {
+      const club = rep.drill?.club;
+      if (!club) continue;
+      repCounts.set(club, (repCounts.get(club) ?? 0) + 1);
+      if ((lastSeen.get(club) ?? 0) < date) lastSeen.set(club, date);
+    }
+  }
+
+  const now = Date.now();
+  return bagClubs
+    .map(club => ({
+      club,
+      daysSinceLastSeen: lastSeen.has(club)
+        ? Math.floor((now - lastSeen.get(club)!) / 86_400_000)
+        : 999,
+      totalReps: repCounts.get(club) ?? 0,
+    }))
+    .filter(c => c.daysSinceLastSeen >= 7)
+    .sort((a, b) => b.daysSinceLastSeen - a.daysSinceLastSeen)
+    .slice(0, 4);
+}
+
 // ── Direction insight helper (used by WeakSpotsPanel) ────────────────────────
 
 export function directionInsight(row: WeakSpotRow): string | null {

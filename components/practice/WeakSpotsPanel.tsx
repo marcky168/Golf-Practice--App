@@ -4,6 +4,8 @@ import type {
   WeakSpotRow,
   TimeOfDayRow,
   PreSessionRow,
+  BlockConsistencyRow,
+  UnpracticedClub,
 } from "@/lib/practice/insights";
 import { directionInsight, hitRateColor, hitRateBarColor } from "@/lib/practice/insights";
 
@@ -44,10 +46,10 @@ function WeakSpotList({ rows, emptyMsg }: { rows: WeakSpotRow[]; emptyMsg: strin
         const direction = directionInsight(row);
         return (
           <div key={row.key}>
-            <div className="flex items-center gap-3 mb-1">
+            <div className="flex items-center gap-3 mb-0.5">
               <span className="text-sm font-medium w-32 shrink-0 truncate">{row.label}</span>
               <HitRateBar rate={row.hitRate} />
-              <span className="text-[11px] text-muted-foreground w-16 text-right shrink-0">
+              <span className="text-[11px] text-muted-foreground w-14 text-right shrink-0">
                 {row.totalReps} rep{row.totalReps !== 1 ? "s" : ""}
               </span>
             </div>
@@ -66,20 +68,26 @@ function WeakSpotList({ rows, emptyMsg }: { rows: WeakSpotRow[]; emptyMsg: strin
 // ── Main panel ────────────────────────────────────────────────────────────────
 
 interface Props {
-  byClub:              WeakSpotRow[];
-  byShape:             WeakSpotRow[];
-  byClubShape:         WeakSpotRow[];
-  timeOfDay:           TimeOfDayRow[];
-  preSessionCorr:      PreSessionRow[];
-  totalRepsLogged:     number;
+  byClub:            WeakSpotRow[];
+  byShape:           WeakSpotRow[];
+  byTrajectory:      WeakSpotRow[];
+  byClubShape:       WeakSpotRow[];
+  timeOfDay:         TimeOfDayRow[];
+  preSessionCorr:    PreSessionRow[];
+  blockConsistency:  BlockConsistencyRow[];
+  leastPracticed:    UnpracticedClub[];
+  totalRepsLogged:   number;
 }
 
 export function WeakSpotsPanel({
   byClub,
   byShape,
+  byTrajectory,
   byClubShape,
   timeOfDay,
   preSessionCorr,
+  blockConsistency,
+  leastPracticed,
   totalRepsLogged,
 }: Props) {
   if (totalRepsLogged < 5) {
@@ -125,6 +133,33 @@ export function WeakSpotsPanel({
         </div>
       )}
 
+      {/* ── Clubs not practiced recently ────────────────────────────── */}
+      {leastPracticed.length > 0 && (
+        <div>
+          <SectionHeader
+            title="Neglected clubs"
+            sub="Clubs in your bag not practiced in 7+ days."
+          />
+          <div className="space-y-2">
+            {leastPracticed.map(c => (
+              <div key={c.club} className="flex items-center gap-3 text-sm">
+                <span className="font-medium w-28 shrink-0">{c.club}</span>
+                <span className="text-muted-foreground">
+                  {c.daysSinceLastSeen === 999
+                    ? "Never practiced"
+                    : `${c.daysSinceLastSeen} day${c.daysSinceLastSeen !== 1 ? "s" : ""} ago`}
+                </span>
+                {c.totalReps > 0 && (
+                  <span className="text-xs text-muted-foreground ml-auto">
+                    {c.totalReps} total reps
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── By Club ─────────────────────────────────────────────────── */}
       <div>
         <SectionHeader
@@ -148,14 +183,51 @@ export function WeakSpotsPanel({
         </div>
       )}
 
+      {/* ── By Trajectory ───────────────────────────────────────────── */}
+      {byTrajectory.length > 0 && (
+        <div>
+          <SectionHeader
+            title="By trajectory"
+            sub="High / Medium / Low — which ball flight you struggle to control."
+          />
+          <WeakSpotList rows={byTrajectory} emptyMsg="" />
+        </div>
+      )}
+
       {/* ── Club + Shape combos ──────────────────────────────────────── */}
       {byClubShape.length > 0 && (
         <div>
           <SectionHeader
             title="Specific weak spots"
-            sub="Club + shape combos with 3+ reps. These are your highest-value practice targets."
+            sub="Club + shape combos with 3+ reps — your highest-value practice targets."
           />
           <WeakSpotList rows={byClubShape.slice(0, 6)} emptyMsg="" />
+        </div>
+      )}
+
+      {/* ── Block consistency trend ──────────────────────────────────── */}
+      {blockConsistency.length > 0 && (
+        <div>
+          <SectionHeader
+            title="Block consistency"
+            sub="Your self-rated consistency (1–5) across recent block sessions."
+          />
+          <div className="space-y-2">
+            {blockConsistency.slice(-6).map((row, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <span className="text-xs text-muted-foreground w-20 shrink-0">{row.date}</span>
+                <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary rounded-full transition-all"
+                    style={{ width: `${(row.avgConsistency / 5) * 100}%` }}
+                  />
+                </div>
+                <span className="text-sm font-semibold tabular-nums w-10 text-right shrink-0">
+                  {row.avgConsistency}/5
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -163,7 +235,7 @@ export function WeakSpotsPanel({
       <div>
         <SectionHeader
           title="Time of day"
-          sub="Average shot rating by when you practice. Lower = worth investigating."
+          sub="Average shot rating by when you practice."
         />
         <div className="space-y-2">
           {timeOfDay.map(row => (
@@ -177,7 +249,7 @@ export function WeakSpotsPanel({
                       style={{ width: `${(row.avgRating / 5) * 100}%` }}
                     />
                   </div>
-                  <span className="text-sm font-semibold tabular-nums text-right w-14 shrink-0">
+                  <span className="text-sm font-semibold tabular-nums w-14 shrink-0 text-right">
                     {row.avgRating}/5
                   </span>
                   <span className="text-xs text-muted-foreground w-20 shrink-0 text-right">
@@ -197,7 +269,7 @@ export function WeakSpotsPanel({
         <div>
           <SectionHeader
             title="Energy vs performance"
-            sub="Average shot rating by your pre-session energy level. See what state produces your best golf."
+            sub="Average shot rating by your pre-session energy level."
           />
           <div className="space-y-2">
             {preSessionCorr.map(row => (
@@ -211,7 +283,7 @@ export function WeakSpotsPanel({
                         style={{ width: `${(row.avgRating / 5) * 100}%` }}
                       />
                     </div>
-                    <span className="text-sm font-semibold tabular-nums text-right w-14 shrink-0">
+                    <span className="text-sm font-semibold tabular-nums w-14 shrink-0 text-right">
                       {row.avgRating}/5
                     </span>
                     <span className="text-xs text-muted-foreground w-20 shrink-0 text-right">

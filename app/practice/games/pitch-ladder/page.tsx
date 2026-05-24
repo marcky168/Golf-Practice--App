@@ -5,10 +5,13 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Target, RotateCcw, Save, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import {
-  calculatePitchLadderScore,
-  PITCH_LADDER_DISTANCES,
-} from "@/lib/practice/games";
+import { calculatePitchLadderScore } from "@/lib/practice/games";
+
+/** Scale 4 partial-swing distances to the selected club's carry. */
+function bagPitchDistances(carry: number): string[] {
+  const pcts = [0.40, 0.55, 0.70, 0.85];
+  return pcts.map(p => `${Math.round((carry * p) / 5) * 5} yd`);
+}
 import { savePracticeSession, getClubBag, type ClubEntry } from "@/app/actions";
 import { buildSessionTiming } from "@/lib/practice/session-duration";
 import { useSessionStartedAt } from "@/lib/practice/use-session-started-at";
@@ -47,7 +50,11 @@ export default function PitchLadderGame() {
   const effectiveClub = (selectedClub?.club ?? customClub) || "Wedge";
   const intentionSet = sessionShape !== null && sessionTrajectory !== null;
   const isComplete = results.every((d) => d.length === 3);
-  const currentDist = PITCH_LADDER_DISTANCES[currentDistanceIndex];
+  // Dynamic distances based on selected club's carry; fall back to 40/55/70/85 yd
+  const distances = selectedClub?.carry
+    ? bagPitchDistances(selectedClub.carry)
+    : ["40 yd", "55 yd", "70 yd", "85 yd"];
+  const currentDist = distances[currentDistanceIndex];
   const ballsAtCurrent = results[currentDistanceIndex].length;
 
   useEffect(() => {
@@ -74,7 +81,7 @@ export default function PitchLadderGame() {
       setCurrentDistanceIndex(currentDistanceIndex + 1);
       if (restInterval > 0) setIsResting(true);
     } else {
-      toast.success(`Pitch ladder — ${calculatePitchLadderScore(newResults).total} pts`);
+      toast.success(`Pitch ladder — ${calculatePitchLadderScore(newResults, distances).total} pts`);
     }
   }
 
@@ -85,7 +92,7 @@ export default function PitchLadderGame() {
   }
 
   async function saveSession() {
-    const result = calculatePitchLadderScore(results);
+    const result = calculatePitchLadderScore(results, distances);
     const timing = buildSessionTiming(sessionStartedAtRef.current ?? Date.now());
     const res = await savePracticeSession({
       type: "game",
@@ -111,7 +118,11 @@ export default function PitchLadderGame() {
           <ArrowLeft className="h-4 w-4" /> Back to Games
         </Link>
         <h1 className="text-3xl font-semibold tracking-tighter mb-2">Pitch Ladder</h1>
-        <p className="text-muted-foreground mb-8">40 → 50 → 60 → 70 yards. Three pitches at each distance.</p>
+        <p className="text-muted-foreground mb-8">
+          {selectedClub?.carry
+            ? `${distances.join(" → ")} — scaled to your ${selectedClub.club} carry.`
+            : "Select a club to see your distances."}
+        </p>
         <div className="space-y-6">
           <div>
             <div className="text-sm font-semibold mb-2">Club</div>
@@ -178,7 +189,7 @@ export default function PitchLadderGame() {
         {isComplete && (
           <div className="space-y-6">
             {(() => {
-              const result = calculatePitchLadderScore(results);
+              const result = calculatePitchLadderScore(results, distances);
               return (
                 <>
                   <div className="text-center py-6 bg-card rounded-2xl border">

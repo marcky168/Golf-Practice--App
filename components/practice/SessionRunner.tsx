@@ -1021,6 +1021,10 @@ export function SessionRunner({
               </button>
             ))}
           </div>
+          <div className='flex justify-between text-[10px] text-muted-foreground/60 mt-1 w-full max-w-[268px]'>
+            <span>Poor</span>
+            <span>Great</span>
+          </div>
         </div>
 
         <div className='text-center text-xs text-muted-foreground pb-4'>

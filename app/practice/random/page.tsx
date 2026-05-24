@@ -18,6 +18,7 @@ import { ResumePrompt, clearPartialSession, type PartialSession } from "@/compon
 import { savePracticeSession, getClubBag } from "@/app/actions";
 import { enrichConfigForSave, timingFromCompletion } from "@/lib/practice/session-save";
 import { unlockPracticeAudio } from "@/lib/practice/feedback";
+import { PreSessionRating } from "@/components/practice/PreSessionRating";
 import { NeuroTrainingToggles, neuroFlagsFromState } from "@/components/practice/NeuroTrainingToggles";
 
 type Intention  = { shape: ShapeType; trajectory: TrajectoryType };
@@ -30,7 +31,7 @@ function randomIntention(): Intention {
   };
 }
 
-type FlowStep = "config" | "running" | "complete";
+type FlowStep = "config" | "pre-session" | "running" | "complete";
 
 export default function RandomPracticePage() {
   const [step, setStep] = useState<FlowStep>("config");
@@ -81,7 +82,7 @@ export default function RandomPracticePage() {
 
     setGeneratedConfig({ ...config, ...neuroFlagsFromState(microPauseMode, slowBurn) });
     setDrillIntentions(config.drills.map(randomIntention));
-    setStep("running");
+    setStep("pre-session");
     const warm = config.warmupShotCount ?? 0;
     toast.success(
       warm > 0
@@ -329,7 +330,7 @@ export default function RandomPracticePage() {
             <CardContent className="pt-5 text-sm">
               <div className="font-medium mb-1">What to expect</div>
               <ul className="text-muted-foreground space-y-1 list-disc pl-5">
-                <li>Starts with ~10 short-club warm-up shots (putting → wedges)</li>
+                <li>Starts with ~10 wedge &amp; chip warm-up shots (shortest clubs first)</li>
                 <li>Tap “End warm-up” when ready — then full random practice begins</li>
                 <li>Practice shots vary club, distance, target, and shape</li>
                 <li>Warm-up and practice are clearly labeled during the session</li>
@@ -352,6 +353,18 @@ export default function RandomPracticePage() {
           )}
         </div>
       </div>
+    );
+  }
+
+  if (step === "pre-session" && generatedConfig) {
+    return (
+      <PreSessionRating
+        onComplete={(energy, focus) => {
+          setGeneratedConfig(prev => prev ? { ...prev, preSessionState: { energy, focus } } : prev);
+          setStep("running");
+        }}
+        onSkip={() => setStep("running")}
+      />
     );
   }
 

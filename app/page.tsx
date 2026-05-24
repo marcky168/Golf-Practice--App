@@ -4,6 +4,8 @@ import { Target, Clock, Flame, TrendingUp, BarChart3, ChevronRight } from "lucid
 import Link from "next/link";
 import { format, subMonths } from "date-fns";
 import { getUserSessions } from "@/app/actions";
+import { computeWeakSpotsByClubShape } from "@/lib/practice/insights";
+import type { SessionConfig } from "@/lib/practice/types";
 import { getLoggedPracticeMinutes, getSessionDurationMinutes } from "@/lib/practice/session-duration";
 import { WelcomeHint } from "@/components/WelcomeHint";
 import { PartialSessionBanner } from "@/components/PartialSessionBanner";
@@ -71,6 +73,14 @@ export default async function GolfPracticeOSDashboard() {
   const mostCommonType = Object.keys(titleCounts).sort((a, b) => titleCounts[b] - titleCounts[a])[0] || "—";
 
   const recentSessions = sessions.slice(0, 3);
+
+  // Top weak spot for the Suggested Focus card
+  const insightSessions = completedSessions.map(s => ({
+    started_at: s.started_at,
+    config: s.config as SessionConfig | null,
+  }));
+  const weakSpots = computeWeakSpotsByClubShape(insightSessions);
+  const topWeakSpot = weakSpots.find(w => w.totalReps >= 3) ?? null;
   return (
     <div className="min-h-screen bg-background pb-20">
 
@@ -156,6 +166,31 @@ export default async function GolfPracticeOSDashboard() {
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {/* Suggested Focus — derived from weak spots analysis */}
+        {user && topWeakSpot && (
+          <Link href="/practice/block">
+            <Card className="border-l-4 border-l-rose-400 hover:shadow-md transition cursor-pointer">
+              <CardContent className="pt-5 pb-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-950/40 flex items-center justify-center shrink-0">
+                    <Target className="h-5 w-5 text-rose-600 dark:text-rose-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10px] font-bold tracking-widest text-rose-600 dark:text-rose-400 uppercase mb-0.5">
+                      Suggested focus
+                    </div>
+                    <div className="font-semibold">{topWeakSpot.label}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {topWeakSpot.hitRate}% hit rate across {topWeakSpot.totalReps} reps — work on this today
+                    </div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
         )}
 
         {/* Insights shortcut — visible once user has sessions */}

@@ -345,23 +345,27 @@ export function calculateLagToTapInScore(scores: number[]): {
 
 export const PITCH_LADDER_DISTANCES = ["40 yd", "50 yd", "60 yd", "70 yd"] as const;
 
-export function calculatePitchLadderScore(results: number[][]): {
+export function calculatePitchLadderScore(
+  results: number[][],
+  customDistances?: string[]
+): {
   total: number;
   max: number;
   byDistance: { distance: string; score: number }[];
 } {
+  const labels = customDistances ?? [...PITCH_LADDER_DISTANCES];
   let total = 0;
   const byDistance: { distance: string; score: number }[] = [];
 
   results.forEach((balls, i) => {
     const distScore = balls.reduce((a, b) => a + b, 0);
     total += distScore;
-    byDistance.push({ distance: PITCH_LADDER_DISTANCES[i] ?? `${i}`, score: distScore });
+    byDistance.push({ distance: labels[i] ?? `${i}`, score: distScore });
   });
 
   return {
     total,
-    max: PITCH_LADDER_DISTANCES.length * 3 * 5,
+    max: labels.length * 3 * 5,
     byDistance,
   };
 }
