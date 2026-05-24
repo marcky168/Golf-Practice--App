@@ -270,9 +270,15 @@ export function attachWarmupToSession(
   // Short-game / putting / bunker sessions don't need a warm-up phase —
   // chipping IS its own warm-up, and adding full-swing wedge drills first
   // disrupts the feel calibration the session is designed to build.
+  //
+  // Check builderFocus first (set by the Practice Builder) because the builder
+  // maps "chipping" to focusAreas: ["short-game", "wedges", "short-irons"] —
+  // "wedges" and "short-irons" would fool a focusAreas-only check.
+  const SHORT_GAME_BUILDER_FOCUSES = new Set(["chipping", "putting", "bunker"]);
   const SHORT_GAME_AREAS = new Set(["short-game", "putting", "bunker"]);
-  const isShortGameOnly = config.focusAreas.length > 0 &&
-    config.focusAreas.every(a => SHORT_GAME_AREAS.has(a));
+  const isShortGameOnly =
+    (config.builderFocus != null && SHORT_GAME_BUILDER_FOCUSES.has(config.builderFocus)) ||
+    (config.focusAreas.length > 0 && config.focusAreas.every(a => SHORT_GAME_AREAS.has(a)));
   if (isShortGameOnly) return config;
 
   const areas = config.focusAreas?.length ? config.focusAreas : DEFAULT_WARMUP_AREAS;
