@@ -97,6 +97,10 @@ export interface RepRecordSnapshot {
   shape?: string;
   trajectory?: string;
   errorCorrection?: RepErrorCorrection;
+  /** Scenario drills: the club the player chose to use */
+  scenarioClub?: string;
+  /** Scenario drills: post-shot assessment */
+  scenarioOutcome?: "good" | "mishit" | "wrong-club";
 }
 
 export interface SessionConfig {

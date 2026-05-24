@@ -692,6 +692,7 @@ export default function PracticeBuilderPage() {
                 ? { shape: sessionShape, trajectory: sessionTrajectory }
                 : undefined
           }
+          userBagClubs={userBag.map(e => e.club)}
           initialRepRecords={resumeData?.repRecords}
           initialCurrentIndex={resumeData?.currentIndex}
           initialSessionStartedAt={resumeData?.sessionStartedAt}

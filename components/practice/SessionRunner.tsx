@@ -65,6 +65,8 @@ interface SessionRunnerProps {
   initialCurrentIndex?: number;
   /** Resume: wall-clock start of the original session */
   initialSessionStartedAt?: number;
+  /** Clubs from the user's bag — shown as a picker for scenario-based drills */
+  userBagClubs?: string[];
 }
 
 interface RepRecord {
@@ -75,6 +77,8 @@ interface RepRecord {
   shape?: ShapeType;
   trajectory?: TrajectoryType;
   errorCorrection?: RepErrorCorrection;
+  scenarioClub?: string;
+  scenarioOutcome?: "good" | "mishit" | "wrong-club";
 }
 
 type Phase = 'running' | 'rest' | 'block-review' | 'reflection' | 'replay' | 'micro-pause';
@@ -89,12 +93,14 @@ export function SessionRunner({
   initialRepRecords,
   initialCurrentIndex,
   initialSessionStartedAt,
+  userBagClubs = [],
 }: SessionRunnerProps) {
   const [phase, setPhase] = useState<Phase>('running');
   const [currentIndex, setCurrentIndex] = useState(initialCurrentIndex ?? 0);
   const [repRecords, setRepRecords] = useState<RepRecord[]>(initialRepRecords ?? []);
   const [isEditingCue, setIsEditingCue] = useState(false);
   const [liveFocusCue, setLiveFocusCue] = useState(config.focusCue || 'Stay present and pick a precise target');
+  const [pendingScenarioClub, setPendingScenarioClub] = useState<string | null>(null);
 
   const [timeLeft, setTimeLeft] = useState(0);
   const [elapsed, setElapsed] = useState(0);
@@ -328,7 +334,10 @@ export function SessionRunner({
     }, 1000);
   }
 
-  function completeCurrentRep(rating?: number) {
+  function completeCurrentRep(
+    rating?: number,
+    scenarioOpts?: { scenarioClub?: string; scenarioOutcome?: "good" | "mishit" | "wrong-club" }
+  ) {
     if (!intentionReady) return;
     if (ultradianExceeded) {
       toast.info('Session capped at 90 minutes — heading to reflection.');
@@ -344,10 +353,13 @@ export function SessionRunner({
       timestamp: Date.now(),
       shape: activeShape,
       trajectory: activeTrajectory,
+      scenarioClub:    scenarioOpts?.scenarioClub,
+      scenarioOutcome: scenarioOpts?.scenarioOutcome,
     };
     setRepRecords(prev => [...prev, record]);
     setPendingShape(null);
     setPendingTrajectory(null);
+    setPendingScenarioClub(null);
     const next = currentIndex + 1;
     const finishedBlock = isMultiBlock && next > 0 && next % ballsPerBlock === 0;
     const finishedSession = next >= totalSteps;
@@ -630,11 +642,12 @@ export function SessionRunner({
     // Soft gate: require the primary question before skip is enabled.
     // Warmup shots are exempt — error correction data there isn't useful.
     const restHasShapeIntention = !isPuttingOrBunker && !!completedIntention;
-    const primaryAnswered = completedIsWarmup || (
-      restHasShapeIntention
+    const primaryAnswered = completedIsWarmup ||
+      completedDrill?.scenarioBased || // scenario outcome was captured at mark-complete time
+      (restHasShapeIntention
         ? !!lastRep?.errorCorrection?.startedOnLine
         : !!lastRep?.errorCorrection?.hitIntendedShot
-    );
+      );
     const restProgress = cadenceSeconds > 0
       ? ((cadenceSeconds - restSecondsLeft) / cadenceSeconds) * 100
       : 0;
@@ -678,16 +691,38 @@ export function SessionRunner({
           </div>
           <div className='flex-1 flex flex-col items-center px-4 max-w-xl mx-auto w-full pt-6 pb-8'>
             <ErrorLogPanel reps={repRecords} />
-            <RestErrorCorrection
-              focusCue={liveFocusCue}
-              intention={effectiveIntention}
-              isPuttingOrBunker={isPuttingOrBunker}
-              club={completedDrill?.club}
-              distance={completedDrill?.distance}
-              drillName={completedDrill?.name}
-              correction={lastRep?.errorCorrection ?? {}}
-              onChange={updateLastRepErrorCorrection}
-            />
+            {!completedDrill?.scenarioBased && (
+              <RestErrorCorrection
+                focusCue={liveFocusCue}
+                intention={effectiveIntention}
+                isPuttingOrBunker={isPuttingOrBunker}
+                club={completedDrill?.club}
+                distance={completedDrill?.distance}
+                drillName={completedDrill?.name}
+                correction={lastRep?.errorCorrection ?? {}}
+                onChange={updateLastRepErrorCorrection}
+              />
+            )}
+            {completedDrill?.scenarioBased && lastRep?.scenarioClub && (
+              <div className='w-full max-w-sm rounded-2xl border bg-card px-4 py-3 text-left mb-5'>
+                <div className='text-[11px] tracking-[3px] text-muted-foreground mb-1'>LAST SHOT</div>
+                <div className='text-sm font-semibold mb-0.5'>{completedDrill.name}</div>
+                <div className='text-xs text-muted-foreground mb-2'>{completedDrill.distance} · {completedDrill.target}</div>
+                <div className='flex items-center gap-2 text-sm'>
+                  <span className='font-medium'>Club used:</span>
+                  <span className='bg-primary/10 text-primary rounded-full px-2.5 py-0.5 text-xs font-semibold'>{lastRep.scenarioClub}</span>
+                  {lastRep.scenarioOutcome && (
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      lastRep.scenarioOutcome === 'good' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' :
+                      lastRep.scenarioOutcome === 'mishit' ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300' :
+                      'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'
+                    }`}>
+                      {lastRep.scenarioOutcome === 'good' ? '✅ Good call' : lastRep.scenarioOutcome === 'mishit' ? '🔁 Mishit' : '💭 Wrong club'}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className='text-center w-full'>
               <div className='text-[11px] tracking-[3px] text-muted-foreground mb-2'>NEXT SHOT IN</div>
@@ -931,7 +966,7 @@ export function SessionRunner({
             </div>
           )}
 
-          {!isInWarmup && (
+          {!isInWarmup && !currentDrill?.scenarioBased && (
             <div className='w-full max-w-md mb-10'>
               <div className='text-xs uppercase tracking-widest text-muted-foreground mb-2'>FOCUS CUE</div>
               {!isEditingCue ? (
@@ -956,119 +991,198 @@ export function SessionRunner({
             </div>
           )}
 
-          <div className='w-full max-w-md mb-6'>
-            {skipIntention ? (
-              <div className='text-xs text-center text-muted-foreground bg-muted/40 rounded-xl py-2 px-4'>
-                {currentDrill?.category === 'putting' ? 'Putting — no shape/trajectory needed' : 'Bunker — no shape/trajectory needed'}
-              </div>
-            ) : presetIntention ? (
-              <div className='bg-primary/5 border border-primary/20 rounded-2xl px-5 py-4 text-center'>
-                <div className='text-xs text-muted-foreground tracking-widest mb-1'>
-                  {isRandomIntentionRep ? 'INTENTION — THIS SHOT' : 'INTENTION'}
+          {currentDrill?.scenarioBased ? (
+            /* ── Scenario drill: club picker + 3-way outcome ─────────── */
+            <>
+              {/* Club picker */}
+              <div className='w-full max-w-md mb-5'>
+                <div className='text-xs uppercase tracking-widest text-muted-foreground mb-2'>
+                  Which club are you using?
                 </div>
-                <div className='text-xl font-semibold text-primary'>
-                  {shapeIcon[presetIntention.shape]} {presetIntention.shape}
-                  <span className='text-muted-foreground mx-2'>·</span>
-                  {trajectoryIcon[presetIntention.trajectory]} {presetIntention.trajectory}
-                </div>
-                {isRandomIntentionRep && (
-                  <p className='text-[10px] text-muted-foreground mt-2'>
-                    New random shape &amp; trajectory each shot
-                  </p>
+                {userBagClubs.length > 0 ? (
+                  <div className='flex flex-wrap gap-2'>
+                    {userBagClubs.map(club => (
+                      <button
+                        key={club}
+                        type='button'
+                        onClick={() => setPendingScenarioClub(club)}
+                        className={`px-4 py-2 rounded-full border text-sm font-medium transition active:scale-95 ${
+                          pendingScenarioClub === club
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-card hover:bg-muted'
+                        }`}
+                      >
+                        {club}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <input
+                    value={pendingScenarioClub ?? ''}
+                    onChange={e => setPendingScenarioClub(e.target.value || null)}
+                    placeholder='e.g. SW, PW, 8-iron, hybrid…'
+                    className='w-full h-12 rounded-xl border bg-card px-4 text-sm'
+                  />
                 )}
               </div>
-            ) : (
-              <IntentionPicker
-                shape={pendingShape}
-                trajectory={pendingTrajectory}
-                onShape={setPendingShape}
-                onTrajectory={setPendingTrajectory}
-              />
-            )}
-          </div>
 
-          <div className='w-full max-w-sm mb-6'>
-            {isMultiBlock ? (
-              <>
-                <div className='flex justify-between text-sm mb-1 font-medium'>
-                  <div>Block {currentBlockIndex + 1} of {numBlocks}</div>
-                  <div>Rep {repInBlock} of {ballsPerBlock}</div>
+              {/* Progress */}
+              <div className='w-full max-w-sm mb-5'>
+                <div className='flex justify-between text-sm mb-2 font-medium'>
+                  <div>Shot {currentIndex + 1} of {totalSteps}</div>
+                  <div>{progressPercent}%</div>
                 </div>
-                <Progress value={blockProgressPercent} className='h-3 mb-2' />
-                <div className='flex justify-between text-xs text-muted-foreground'>
-                  <span>Session: {currentIndex + 1}/{totalSteps}</span>
-                  <span>{progressPercent}%</span>
-                </div>
-              </>
-            ) : warmupShotCount > 0 ? (
-              <div className='flex justify-between text-sm mb-2 font-medium'>
-                <div>
-                  {isInWarmup
-                    ? `Warm-up ${warmupRepNumber}/${warmupShotCount}`
-                    : `Practice ${practiceRepNumber}/${practiceShotCount}`}
-                </div>
-                <div>{progressPercent}% session</div>
+                <Progress value={progressPercent} className='h-3' />
               </div>
-            ) : (
-              <div className='flex justify-between text-sm mb-2 font-medium'>
-                <div>Shot {currentIndex + 1} of {totalSteps}</div>
-                <div>{progressPercent}%</div>
+
+              {/* 3-way outcome — these ARE the mark-complete action */}
+              <div className={`w-full max-w-sm space-y-2.5 transition-opacity ${pendingScenarioClub ? 'opacity-100' : 'opacity-35 pointer-events-none'}`}>
+                <div className='text-sm text-center text-muted-foreground mb-1'>
+                  {pendingScenarioClub
+                    ? `Hit your shot with ${pendingScenarioClub} — how did it go?`
+                    : 'Select a club above to unlock ↑'}
+                </div>
+                <button
+                  onClick={() => completeCurrentRep(5, { scenarioClub: pendingScenarioClub ?? undefined, scenarioOutcome: 'good' })}
+                  disabled={!pendingScenarioClub}
+                  className='w-full h-14 rounded-2xl border-2 border-emerald-500 bg-emerald-50/80 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-200 font-semibold text-base active:scale-[0.985] transition'
+                >
+                  ✅ Right call — executed it well
+                </button>
+                <button
+                  onClick={() => completeCurrentRep(3, { scenarioClub: pendingScenarioClub ?? undefined, scenarioOutcome: 'mishit' })}
+                  disabled={!pendingScenarioClub}
+                  className='w-full h-14 rounded-2xl border bg-card font-medium text-base hover:bg-muted active:scale-[0.985] transition'
+                >
+                  🔁 Right club — mishit it
+                </button>
+                <button
+                  onClick={() => completeCurrentRep(1, { scenarioClub: pendingScenarioClub ?? undefined, scenarioOutcome: 'wrong-club' })}
+                  disabled={!pendingScenarioClub}
+                  className='w-full h-14 rounded-2xl border bg-card font-medium text-base hover:bg-muted active:scale-[0.985] transition'
+                >
+                  💭 Would choose a different club
+                </button>
               </div>
-            )}
-            {!isMultiBlock && <Progress value={progressPercent} className='h-3' />}
-          </div>
+            </>
+          ) : (
+            /* ── Standard drill: intention + mark-complete + 1-5 rating ─ */
+            <>
+              <div className='w-full max-w-md mb-6'>
+                {skipIntention ? (
+                  <div className='text-xs text-center text-muted-foreground bg-muted/40 rounded-xl py-2 px-4'>
+                    {currentDrill?.category === 'putting' ? 'Putting — no shape/trajectory needed' : 'Bunker — no shape/trajectory needed'}
+                  </div>
+                ) : presetIntention ? (
+                  <div className='bg-primary/5 border border-primary/20 rounded-2xl px-5 py-4 text-center'>
+                    <div className='text-xs text-muted-foreground tracking-widest mb-1'>
+                      {isRandomIntentionRep ? 'INTENTION — THIS SHOT' : 'INTENTION'}
+                    </div>
+                    <div className='text-xl font-semibold text-primary'>
+                      {shapeIcon[presetIntention.shape]} {presetIntention.shape}
+                      <span className='text-muted-foreground mx-2'>·</span>
+                      {trajectoryIcon[presetIntention.trajectory]} {presetIntention.trajectory}
+                    </div>
+                    {isRandomIntentionRep && (
+                      <p className='text-[10px] text-muted-foreground mt-2'>
+                        New random shape &amp; trajectory each shot
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <IntentionPicker
+                    shape={pendingShape}
+                    trajectory={pendingTrajectory}
+                    onShape={setPendingShape}
+                    onTrajectory={setPendingTrajectory}
+                  />
+                )}
+              </div>
 
-          {warmupShotCount > 0 && isInWarmup && (
-            <Button
-              size='lg'
-              variant='secondary'
-              className='w-full max-w-sm mb-6 h-14 text-base font-semibold border-amber-300 bg-amber-100 text-amber-950 hover:bg-amber-200 dark:bg-amber-900/50 dark:text-amber-100'
-              onClick={endWarmup}
-            >
-              <ArrowRight className='mr-2 h-5 w-5' />
-              End warm-up → Start practice
-            </Button>
-          )}
+              <div className='w-full max-w-sm mb-6'>
+                {isMultiBlock ? (
+                  <>
+                    <div className='flex justify-between text-sm mb-1 font-medium'>
+                      <div>Block {currentBlockIndex + 1} of {numBlocks}</div>
+                      <div>Rep {repInBlock} of {ballsPerBlock}</div>
+                    </div>
+                    <Progress value={blockProgressPercent} className='h-3 mb-2' />
+                    <div className='flex justify-between text-xs text-muted-foreground'>
+                      <span>Session: {currentIndex + 1}/{totalSteps}</span>
+                      <span>{progressPercent}%</span>
+                    </div>
+                  </>
+                ) : warmupShotCount > 0 ? (
+                  <div className='flex justify-between text-sm mb-2 font-medium'>
+                    <div>
+                      {isInWarmup
+                        ? `Warm-up ${warmupRepNumber}/${warmupShotCount}`
+                        : `Practice ${practiceRepNumber}/${practiceShotCount}`}
+                    </div>
+                    <div>{progressPercent}% session</div>
+                  </div>
+                ) : (
+                  <div className='flex justify-between text-sm mb-2 font-medium'>
+                    <div>Shot {currentIndex + 1} of {totalSteps}</div>
+                    <div>{progressPercent}%</div>
+                  </div>
+                )}
+                {!isMultiBlock && <Progress value={progressPercent} className='h-3' />}
+              </div>
 
-          {cadenceSeconds > 0 && (
-            <p className='text-xs text-muted-foreground mb-3'>
-              {cadenceSeconds}s cadence between shots
-              {isIosLikeDevice() && (
-                <span className='block mt-1 text-amber-700/90 dark:text-amber-400/90'>
-                  iPhone: use your side volume buttons (media volume). Tones unlock when you tap Start or Mark Shot.
-                </span>
+              {warmupShotCount > 0 && isInWarmup && (
+                <Button
+                  size='lg'
+                  variant='secondary'
+                  className='w-full max-w-sm mb-6 h-14 text-base font-semibold border-amber-300 bg-amber-100 text-amber-950 hover:bg-amber-200 dark:bg-amber-900/50 dark:text-amber-100'
+                  onClick={endWarmup}
+                >
+                  <ArrowRight className='mr-2 h-5 w-5' />
+                  End warm-up → Start practice
+                </Button>
               )}
-            </p>
-          )}
 
-          <Button
-            size='lg'
-            className='h-20 text-2xl w-full max-w-sm font-semibold active:scale-[0.985] disabled:opacity-40'
-            onClick={() => completeCurrentRep()}
-            disabled={!intentionReady}
-          >
-            {isMultiBlock ? 'TAP — REP COMPLETE' : 'MARK SHOT COMPLETE'}
-          </Button>
+              {cadenceSeconds > 0 && (
+                <p className='text-xs text-muted-foreground mb-3'>
+                  {cadenceSeconds}s cadence between shots
+                  {isIosLikeDevice() && (
+                    <span className='block mt-1 text-amber-700/90 dark:text-amber-400/90'>
+                      iPhone: use your side volume buttons (media volume). Tones unlock when you tap Start or Mark Shot.
+                    </span>
+                  )}
+                </p>
+              )}
 
-          <div className={'mt-6 text-sm transition ' + (intentionReady ? 'text-muted-foreground' : 'text-muted-foreground/40')}>
-            Quick rate this shot:
-          </div>
-          <div className='flex gap-2 mt-2'>
-            {[1, 2, 3, 4, 5].map(r => (
-              <button
-                key={r}
-                onClick={() => completeCurrentRep(r)}
+              <Button
+                size='lg'
+                className='h-20 text-2xl w-full max-w-sm font-semibold active:scale-[0.985] disabled:opacity-40'
+                onClick={() => completeCurrentRep()}
                 disabled={!intentionReady}
-                className='h-12 w-12 rounded-full border text-lg hover:bg-muted active:bg-primary active:text-white transition disabled:opacity-30 disabled:cursor-not-allowed'
               >
-                {r}
-              </button>
-            ))}
-          </div>
-          <div className='flex justify-between text-[10px] text-muted-foreground/60 mt-1 w-full max-w-[268px]'>
-            <span>Poor</span>
-            <span>Great</span>
-          </div>
+                {isMultiBlock ? 'TAP — REP COMPLETE' : 'MARK SHOT COMPLETE'}
+              </Button>
+
+              <div className={'mt-6 text-sm transition ' + (intentionReady ? 'text-muted-foreground' : 'text-muted-foreground/40')}>
+                Quick rate this shot:
+              </div>
+              <div className='flex gap-2 mt-2'>
+                {[1, 2, 3, 4, 5].map(r => (
+                  <button
+                    key={r}
+                    onClick={() => completeCurrentRep(r)}
+                    disabled={!intentionReady}
+                    className='h-12 w-12 rounded-full border text-lg hover:bg-muted active:bg-primary active:text-white transition disabled:opacity-30 disabled:cursor-not-allowed'
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
+              <div className='flex justify-between text-[10px] text-muted-foreground/60 mt-1 w-full max-w-[268px]'>
+                <span>Poor</span>
+                <span>Great</span>
+              </div>
+            </>
+          )}
         </div>
 
         <div className='text-center text-xs text-muted-foreground pb-4'>

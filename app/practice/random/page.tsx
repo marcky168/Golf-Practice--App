@@ -378,6 +378,7 @@ export default function RandomPracticePage() {
           onExit={() => setStep("config")}
           drillIntentions={drillIntentions}
           restIntervalSeconds={restInterval}
+          userBagClubs={userBag.map(e => e.club)}
           initialRepRecords={resumeData?.repRecords}
           initialCurrentIndex={resumeData?.currentIndex}
           initialSessionStartedAt={resumeData?.sessionStartedAt}
