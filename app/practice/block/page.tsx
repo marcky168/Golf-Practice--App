@@ -21,6 +21,7 @@ import { ResumePrompt, clearPartialSession, type PartialSession } from "@/compon
 import { savePracticeSession } from "@/app/actions";
 import { enrichConfigForSave, timingFromCompletion } from "@/lib/practice/session-save";
 import { unlockPracticeAudio } from "@/lib/practice/feedback";
+import { NeuroTrainingToggles, neuroFlagsFromState } from "@/components/practice/NeuroTrainingToggles";
 import { BlockDrillLibraryList } from "@/components/practice/BlockDrillLibraryList";
 import {
   BLOCK_DRILL_LIBRARY,
@@ -57,6 +58,8 @@ export default function BlockPracticePage() {
   const [customCue, setCustomCue] = useState<string>("");
   const [timerMinutes, setTimerMinutes] = useState<number>(25);
   const [restInterval, setRestInterval] = useState<number>(30);
+  const [microPauseMode, setMicroPauseMode] = useState(false);
+  const [slowBurn, setSlowBurn] = useState(false);
   const [sessionShape, setSessionShape] = useState<ShapeType | null>(null);
   const [sessionTrajectory, setSessionTrajectory] = useState<TrajectoryType | null>(null);
   const [checklist, setChecklist] = useState<boolean[]>([false, false, false]);
@@ -141,7 +144,7 @@ export default function BlockPracticePage() {
       return;
     }
 
-    setSessionConfig(config);
+    setSessionConfig({ ...config, ...neuroFlagsFromState(microPauseMode, slowBurn) });
     setStep("running");
     toast.success(`Block session started — ${reps} reps`);
   }
@@ -156,7 +159,7 @@ export default function BlockPracticePage() {
       return;
     }
 
-    setSessionConfig(config);
+    setSessionConfig({ ...config, ...neuroFlagsFromState(microPauseMode, slowBurn) });
     setRestInterval(config.cadenceSeconds ?? 0);
     setStep("running");
     const total = (config.ballsPerBlock ?? 0) * (config.numBlocks ?? 0) || config.drills.length;
@@ -504,6 +507,13 @@ export default function BlockPracticePage() {
               Rest cadence: {selectedPreset.cadenceSeconds}s between shots (from drill preset).
             </p>
           )}
+
+          <NeuroTrainingToggles
+            microPauseMode={microPauseMode}
+            slowBurn={slowBurn}
+            onMicroPauseChange={setMicroPauseMode}
+            onSlowBurnChange={setSlowBurn}
+          />
 
           {/* Deliberate Checklist */}
           <Card className="border-primary/30">

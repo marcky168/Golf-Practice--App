@@ -9,6 +9,16 @@ import { toast } from 'sonner';
 import type { SessionConfig, Drill, BlockResult } from '@/lib/practice/types';
 import { ReflectionForm } from './ReflectionForm';
 import { NeuralReplayTimer } from './NeuralReplayTimer';
+import { MicroPauseScreen } from './MicroPauseScreen';
+import { ErrorLogPanel } from './ErrorLogPanel';
+import { computeErrorLogSummary } from '@/lib/practice/error-log';
+import {
+  ULTRADIAN_MAX_SECONDS,
+  ULTRADIAN_WARN_SECONDS,
+  ULTRADIAN_MAX_MINUTES,
+  formatSessionClock,
+  ultradianProgress,
+} from '@/lib/practice/ultradian';
 import { BlockResultLogger } from './BlockResultLogger';
 import {
   celebrateBlockComplete,
@@ -98,6 +108,11 @@ export function SessionRunner({
   const microPauseNextRef = useRef<(() => void) | null>(null);
   const [microPauseSecondsLeft, setMicroPauseSecondsLeft] = useState(10);
   const warned90MinRef = useRef(false);
+  const warned75MinRef = useRef(false);
+  const [sessionWallElapsed, setSessionWallElapsed] = useState(0);
+  const [ultradianExceeded, setUltradianExceeded] = useState(false);
+  const lastMicroPauseRepRef = useRef<number>(-99);
+  const MICRO_PAUSE_MIN_GAP = 3;
   const pendingResultRef = useRef<any>(null);
   const pendingNavRef = useRef<(() => void) | null>(null);
 
@@ -146,11 +161,23 @@ export function SessionRunner({
     const interval = setInterval(() => {
       const now = Date.now();
       const realElapsed = timerStartTime ? Math.floor((now - timerStartTime) / 1000) : 0;
-      // 90-minute cognitive fatigue warning (Ultradian Rhythm ceiling)
-      if (!warned90MinRef.current && realElapsed >= 90 * 60) {
-        warned90MinRef.current = true;
-        toast.warning('90-minute mark — sloppy reps are counterproductive. Wrap up when ready.');
+      const wallElapsed = Math.floor((now - sessionStartedAtRef.current) / 1000);
+      setSessionWallElapsed(wallElapsed);
+
+      if (!warned75MinRef.current && wallElapsed >= ULTRADIAN_WARN_SECONDS) {
+        warned75MinRef.current = true;
+        toast.info('75-minute mark — plan to wrap within 15 min. Sloppy reps work against you.');
       }
+      if (!warned90MinRef.current && wallElapsed >= ULTRADIAN_MAX_SECONDS) {
+        warned90MinRef.current = true;
+        setUltradianExceeded(true);
+        toast.warning('90-minute ultradian limit reached — time to reflect and stop.');
+        stopTimer();
+        clearInterval(restTimerRef.current!);
+        clearInterval(microPauseTimerRef.current!);
+        goToReflection();
+      }
+
       if (isCountdown) {
         const remaining = Math.max(0, config.durationMinutes * 60 - realElapsed);
         setTimeLeft(remaining);
@@ -300,6 +327,11 @@ export function SessionRunner({
 
   function completeCurrentRep(rating?: number) {
     if (!intentionReady) return;
+    if (ultradianExceeded) {
+      toast.info('Session capped at 90 minutes — heading to reflection.');
+      goToReflection();
+      return;
+    }
     // First rep tap unlocks audio on iOS Safari so cadence tones play
     unlockPracticeAudio();
     const record: RepRecord = {
@@ -336,14 +368,17 @@ export function SessionRunner({
     }
 
     // Huberman Random Neural Micro-Pause (~25 % of practice shots)
+    // Min-gap of 3 shots prevents back-to-back clustering that kills session rhythm.
     const shouldMicroPause =
       config.microPauseMode &&
       !isWarmupIndex(currentIndex) &&
       !finishedSession &&
       !finishedBlock &&
+      (currentIndex - lastMicroPauseRepRef.current) >= MICRO_PAUSE_MIN_GAP &&
       Math.random() < 0.25;
 
     if (shouldMicroPause) {
+      lastMicroPauseRepRef.current = currentIndex;
       triggerMicroPause(advance);
     } else {
       advance();
@@ -372,17 +407,25 @@ export function SessionRunner({
   }
 
   function handleSaveReflection(data: any) {
+    const mappedReps = repRecords.map(r => ({
+      repNumber: r.repNumber,
+      rating: r.rating,
+      drill: r.drill,
+      blockIndex: isMultiBlock ? Math.floor((r.repNumber - 1) / ballsPerBlock) : undefined,
+      shape: r.shape,
+      trajectory: r.trajectory,
+      errorCorrection: r.errorCorrection,
+    }));
+    const logSummary = computeErrorLogSummary(mappedReps);
     pendingResultRef.current = {
-      repRecords: repRecords.map(r => ({
-        repNumber: r.repNumber,
-        rating: r.rating,
-        drill: r.drill,
-        blockIndex: isMultiBlock ? Math.floor((r.repNumber - 1) / ballsPerBlock) : undefined,
-        shape: r.shape,
-        trajectory: r.trajectory,
-        errorCorrection: r.errorCorrection,
-      })),
+      repRecords: mappedReps,
       blockResults: blockResultsRef.current,
+      errorLogSummary: {
+        adaptationSignals: logSummary.adaptationSignals,
+        yes: logSummary.yes,
+        partial: logSummary.partial,
+        no: logSummary.no,
+      },
       reflection: {
         well: data.well,
         improve: data.improve,
@@ -561,37 +604,7 @@ export function SessionRunner({
 
   // ── NEURAL MICRO-PAUSE ──────────────────────────────────────────────────────
   if (phase === 'micro-pause') {
-    return (
-      <div className="min-h-screen bg-[#080f1a] text-white flex flex-col items-center justify-center px-6 text-center">
-        {/* Pulsing brain icon */}
-        <div className="w-20 h-20 rounded-full bg-blue-500/15 flex items-center justify-center mb-8 animate-pulse">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-10 h-10 text-blue-400">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15M14.25 3.104c.251.023.501.05.75.082M19.8 15a2.25 2.25 0 01.45 1.317C20.25 17.919 18.796 20 16.5 20H7.5c-2.296 0-3.75-2.081-3.75-3.683A2.25 2.25 0 014.2 15m15.6 0H4.2" />
-          </svg>
-        </div>
-
-        <div className="text-[10px] tracking-[4px] text-blue-400/70 mb-3 uppercase font-semibold">
-          Neural Replay Gap
-        </div>
-        <h2 className="text-3xl font-semibold tracking-tighter mb-3">Freeze &amp; Replay</h2>
-        <p className="text-white/55 text-sm mb-10 max-w-xs leading-relaxed">
-          Your motor cortex is replaying that swing at 20× speed. Stand still — this is a free rep.
-        </p>
-
-        <div className="text-[96px] font-semibold tabular-nums leading-none tracking-tighter mb-3 text-blue-400">
-          {microPauseSecondsLeft}
-        </div>
-
-        <div className="w-48 h-1 bg-white/10 rounded-full mb-10">
-          <div
-            className="h-full bg-blue-400/60 rounded-full transition-all duration-1000"
-            style={{ width: `${((10 - microPauseSecondsLeft) / 10) * 100}%` }}
-          />
-        </div>
-
-        <p className="text-[11px] text-white/25 tracking-wide">— Huberman Lab Motor Learning Protocol</p>
-      </div>
-    );
+    return <MicroPauseScreen secondsLeft={microPauseSecondsLeft} />;
   }
 
   // ── REST (shot cadence timer) ───────────────────────────────────────────────
@@ -605,6 +618,20 @@ export function SessionRunner({
     const lastRep = repRecords[repRecords.length - 1];
     const isPuttingOrBunker =
       completedDrill?.category === 'putting' || completedDrill?.category === 'bunker';
+    // Fall back to the shape/trajectory recorded on the rep itself (covers manual IntentionPicker picks)
+    const effectiveIntention: Intention | null =
+      completedIntention ??
+      (lastRep?.shape && lastRep?.trajectory && !isPuttingOrBunker
+        ? { shape: lastRep.shape, trajectory: lastRep.trajectory }
+        : null);
+    // Soft gate: require the primary question before skip is enabled.
+    // Warmup shots are exempt — error correction data there isn't useful.
+    const restHasShapeIntention = !isPuttingOrBunker && !!completedIntention;
+    const primaryAnswered = completedIsWarmup || (
+      restHasShapeIntention
+        ? !!lastRep?.errorCorrection?.startedOnLine
+        : !!lastRep?.errorCorrection?.hitIntendedShot
+    );
     const restProgress = cadenceSeconds > 0
       ? ((cadenceSeconds - restSecondsLeft) / cadenceSeconds) * 100
       : 0;
@@ -613,33 +640,48 @@ export function SessionRunner({
         <div className='min-h-screen bg-background flex flex-col pb-8'>
           <div
             className={
-              'border-b px-4 py-3 flex items-center justify-between sticky top-0 z-50 ' +
+              'border-b sticky top-0 z-50 ' +
               (completedIsWarmup
                 ? 'bg-amber-50 dark:bg-amber-950/40'
                 : 'bg-blue-50 dark:bg-blue-950/30')
             }
           >
-            <div
-              className={
-                'font-medium text-sm ' +
-                (completedIsWarmup
-                  ? 'text-amber-800 dark:text-amber-300'
-                  : 'text-blue-700 dark:text-blue-400')
-              }
-            >
-              {completedIsWarmup ? 'WARM-UP REST' : 'PRACTICE REST'} — review last shot
+            <div className='px-4 py-3 flex items-center justify-between'>
+              <div
+                className={
+                  'font-medium text-sm ' +
+                  (completedIsWarmup
+                    ? 'text-amber-800 dark:text-amber-300'
+                    : 'text-blue-700 dark:text-blue-400')
+                }
+              >
+                {completedIsWarmup ? 'WARM-UP REST' : 'PRACTICE REST'} — review last shot
+              </div>
+              <div className='flex items-center gap-3 shrink-0'>
+                <span className={`text-xs tabular-nums font-medium ${sessionWallElapsed >= ULTRADIAN_WARN_SECONDS ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>
+                  {formatSessionClock(sessionWallElapsed)}
+                </span>
+                <button onClick={handleExit} className='text-xs text-destructive flex items-center gap-1'>
+                  <X className='h-3.5 w-3.5' /> End Session
+                </button>
+              </div>
             </div>
-            <button onClick={handleExit} className='text-xs text-destructive flex items-center gap-1'>
-              <X className='h-3.5 w-3.5' /> End Session
-            </button>
+            <div className='h-0.5 bg-muted'>
+              <div
+                className={`h-full transition-all duration-1000 ${sessionWallElapsed >= ULTRADIAN_WARN_SECONDS ? 'bg-amber-500' : 'bg-primary/40'}`}
+                style={{ width: `${ultradianProgress(sessionWallElapsed)}%` }}
+              />
+            </div>
           </div>
           <div className='flex-1 flex flex-col items-center px-4 max-w-xl mx-auto w-full pt-6 pb-8'>
+            <ErrorLogPanel reps={repRecords} />
             <RestErrorCorrection
               focusCue={liveFocusCue}
-              intention={completedIntention}
+              intention={effectiveIntention}
               isPuttingOrBunker={isPuttingOrBunker}
               club={completedDrill?.club}
               distance={completedDrill?.distance}
+              drillName={completedDrill?.name}
               correction={lastRep?.errorCorrection ?? {}}
               onChange={updateLastRepErrorCorrection}
             />
@@ -695,8 +737,16 @@ export function SessionRunner({
                 })()}
               </div>
             )}
-            <button onClick={() => skipRest(currentIndex + 1)} className='text-sm text-muted-foreground hover:text-foreground transition underline underline-offset-4'>
-              Skip rest
+            <button
+              onClick={() => { if (primaryAnswered) skipRest(currentIndex + 1); }}
+              disabled={!primaryAnswered}
+              className={`text-sm transition ${
+                primaryAnswered
+                  ? 'text-muted-foreground hover:text-foreground underline underline-offset-4 cursor-pointer'
+                  : 'text-muted-foreground/40 cursor-not-allowed'
+              }`}
+            >
+              {primaryAnswered ? 'Skip rest' : 'Rate shot to skip'}
             </button>
           </div>
         </div>
@@ -735,26 +785,39 @@ export function SessionRunner({
       <div className='min-h-screen bg-background flex flex-col pb-8'>
         <div
           className={
-            'border-b px-4 py-3 flex items-center justify-between sticky top-0 z-50 ' +
+            'border-b sticky top-0 z-50 ' +
             (isInWarmup ? 'bg-amber-50 dark:bg-amber-950/40' : 'bg-card')
           }
         >
-          <div className='min-w-0 flex-1 pr-2'>
-            {warmupShotCount > 0 && (
-              <div
-                className={
-                  'text-[10px] font-bold tracking-[0.2em] uppercase mb-0.5 ' +
-                  (isInWarmup ? 'text-amber-700 dark:text-amber-400' : 'text-primary')
-                }
-              >
-                {isInWarmup ? 'Warm-up' : 'Practice'}
-              </div>
-            )}
-            <div className='font-medium text-sm truncate'>{config.title}</div>
+          <div className='px-4 py-3 flex items-center justify-between'>
+            <div className='min-w-0 flex-1 pr-2'>
+              {warmupShotCount > 0 && (
+                <div
+                  className={
+                    'text-[10px] font-bold tracking-[0.2em] uppercase mb-0.5 ' +
+                    (isInWarmup ? 'text-amber-700 dark:text-amber-400' : 'text-primary')
+                  }
+                >
+                  {isInWarmup ? 'Warm-up' : 'Practice'}
+                </div>
+              )}
+              <div className='font-medium text-sm truncate'>{config.title}</div>
+            </div>
+            <div className='flex items-center gap-3 shrink-0'>
+              <span className={`text-xs tabular-nums font-medium ${sessionWallElapsed >= ULTRADIAN_WARN_SECONDS ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>
+                {formatSessionClock(sessionWallElapsed)}
+              </span>
+              <button onClick={handleExit} className='text-xs text-destructive flex items-center gap-1'>
+                <X className='h-3.5 w-3.5' /> End Session
+              </button>
+            </div>
           </div>
-          <button onClick={handleExit} className='text-xs text-destructive flex items-center gap-1 shrink-0'>
-            <X className='h-3.5 w-3.5' /> End Session
-          </button>
+          <div className='h-0.5 bg-muted'>
+            <div
+              className={`h-full transition-all duration-1000 ${sessionWallElapsed >= ULTRADIAN_WARN_SECONDS ? 'bg-amber-500' : 'bg-primary/40'}`}
+              style={{ width: `${ultradianProgress(sessionWallElapsed)}%` }}
+            />
+          </div>
         </div>
 
         <div className='flex-1 flex flex-col items-center justify-center px-4 max-w-xl mx-auto w-full text-center'>
@@ -768,6 +831,8 @@ export function SessionRunner({
               </div>
             </div>
           )}
+
+          <ErrorLogPanel reps={repRecords} />
 
           {warmupShotCount > 0 && (
             <div
@@ -799,6 +864,11 @@ export function SessionRunner({
             <div className='session-timer text-[86px] leading-none font-semibold tabular-nums tracking-tighter text-primary'>
               {displayTime}
             </div>
+            {ultradianExceeded && (
+              <p className='text-sm text-amber-600 dark:text-amber-400 mt-2 font-medium'>
+                90-min limit reached — wrap up and reflect
+              </p>
+            )}
           </div>
 
           <div className='w-full max-w-md mb-8'>

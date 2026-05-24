@@ -116,6 +116,13 @@ export interface SessionConfig {
    * speed, forcing conscious mapping of every position in the motor cortex.
    */
   slowBurn?: boolean;
+  /** Adaptation signal totals (partial/no error-correction taps) saved at session end */
+  errorLogSummary?: {
+    adaptationSignals: number;
+    yes: number;
+    partial: number;
+    no: number;
+  };
 }
 
 export interface PracticeSession {
@@ -141,6 +148,14 @@ export interface PracticeSession {
 }
 
 // Game definition (used for the Games hub + scoring engine)
+export type GameCategory =
+  | "chipping"
+  | "putting"
+  | "pitching"
+  | "full-swing"
+  | "course-sim"
+  | "pressure";
+
 export interface GameDefinition {
   id: string;
   name: string;
@@ -148,6 +163,7 @@ export interface GameDefinition {
   whyItHelps: string;
   estimatedMinutes: number;
   difficulty: "beginner" | "intermediate" | "advanced";
+  category: GameCategory;
   // A game can provide its own React component for interactive scoring
   // or use a generic one driven by this config
   scoringType: "proximity" | "up-down" | "ladder" | "matrix" | "pressure" | "custom";

@@ -10,6 +10,7 @@ import { ArrowLeft, Target, Shuffle, Award, Calendar } from "lucide-react";
 import { HistorySessionDetail } from "./HistorySessionDetail";
 import { PracticeTrends } from "@/components/practice/PracticeTrends";
 import { ErrorCorrectionTrends } from "@/components/practice/ErrorCorrectionTrends";
+import { ErrorLogTrends } from "@/components/practice/ErrorLogTrends";
 import { getSessionDurationMinutes } from "@/lib/practice/session-duration";
 
 export default async function HistoryPage() {
@@ -95,6 +96,19 @@ export default async function HistoryPage() {
               <ErrorCorrectionTrends sessions={sessions.map(s => ({
                 started_at: s.started_at,
                 type: s.type,
+                config: s.config as import("@/lib/practice/types").SessionConfig | null,
+              }))} />
+            </div>
+
+            <div className="border-t mt-8 pt-8">
+              <h3 className="text-sm font-semibold tracking-widest text-muted-foreground uppercase mb-1">
+                Adaptation signal log
+              </h3>
+              <p className="text-sm text-muted-foreground mb-6">
+                Rest-timer partial and miss taps reframed as learning data — not failures.
+              </p>
+              <ErrorLogTrends sessions={sessions.map(s => ({
+                started_at: s.started_at,
                 config: s.config as import("@/lib/practice/types").SessionConfig | null,
               }))} />
             </div>

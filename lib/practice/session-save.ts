@@ -1,5 +1,6 @@
 import { durationMinutesFromRange } from "./session-duration";
 import type { BlockResult, RepRecordSnapshot, SessionConfig } from "./types";
+import { computeErrorLogSummary } from "./error-log";
 
 export type SessionCompletionTiming = {
   startedAt: string;
@@ -30,9 +31,23 @@ export function enrichConfigForSave(
     blockResults?: BlockResult[];
   }
 ): SessionConfig {
+  const errorLogSummary =
+    extras.repRecords && extras.repRecords.length > 0
+      ? (() => {
+          const s = computeErrorLogSummary(extras.repRecords);
+          return {
+            adaptationSignals: s.adaptationSignals,
+            yes: s.yes,
+            partial: s.partial,
+            no: s.no,
+          };
+        })()
+      : undefined;
+
   return {
     ...config,
     repRecords: extras.repRecords,
     blockResults: extras.blockResults,
+    ...(errorLogSummary ? { errorLogSummary } : {}),
   };
 }

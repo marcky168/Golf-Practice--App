@@ -26,6 +26,7 @@ import {
   focusSupportsSwingLength,
 } from "@/lib/practice/partial-shots";
 import type { BuilderFocus, BuilderPracticeMode, SessionConfig, SwingLength } from "@/lib/practice/types";
+import { NeuroTrainingToggles, neuroFlagsFromState } from "@/components/practice/NeuroTrainingToggles";
 import { SessionRunner } from "@/components/practice/SessionRunner";
 import { SessionRunnerErrorBoundary } from "@/components/practice/SessionRunnerErrorBoundary";
 import { IntentionPicker, type ShapeType, type TrajectoryType } from "@/components/practice/IntentionPicker";
@@ -212,8 +213,7 @@ export default function PracticeBuilderPage() {
     }
     const config: SessionConfig = {
       ...rawConfig,
-      ...(microPauseMode ? { microPauseMode: true } : {}),
-      ...(slowBurn ? { slowBurn: true } : {}),
+      ...neuroFlagsFromState(microPauseMode, slowBurn),
     };
     setSessionConfig(config);
     setStep("running");
@@ -532,53 +532,12 @@ export default function PracticeBuilderPage() {
           </div>
 
           {/* ── Neuro-training modes ─────────────────────────────── */}
-          <div>
-            <Label className="mb-1 block text-base">Neuro-training modes</Label>
-            <p className="text-xs text-muted-foreground mb-3">
-              Based on Huberman Lab motor-learning protocols — off by default.
-            </p>
-            <div className="space-y-2">
-              <button
-                type="button"
-                onClick={() => setMicroPauseMode(v => !v)}
-                className={`w-full text-left px-4 py-3 rounded-xl border transition active:scale-[0.985] ${
-                  microPauseMode ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30" : "bg-card hover:bg-muted"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="font-medium text-sm">
-                    ⏸ Random Neural Micro-Pauses
-                  </div>
-                  <div className={`text-xs font-semibold px-2 py-0.5 rounded-full ${microPauseMode ? "bg-blue-500 text-white" : "bg-muted text-muted-foreground"}`}>
-                    {microPauseMode ? "ON" : "OFF"}
-                  </div>
-                </div>
-                <div className="text-xs text-muted-foreground mt-0.5">
-                  ~25% of shots trigger a 10-second freeze — motor cortex replays the swing at 20× speed
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setSlowBurn(v => !v)}
-                className={`w-full text-left px-4 py-3 rounded-xl border transition active:scale-[0.985] ${
-                  slowBurn ? "border-orange-400 bg-orange-50 dark:bg-orange-950/30" : "bg-card hover:bg-muted"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="font-medium text-sm">
-                    🔥 Slow Burn Mode
-                  </div>
-                  <div className={`text-xs font-semibold px-2 py-0.5 rounded-full ${slowBurn ? "bg-orange-500 text-white" : "bg-muted text-muted-foreground"}`}>
-                    {slowBurn ? "ON" : "OFF"}
-                  </div>
-                </div>
-                <div className="text-xs text-muted-foreground mt-0.5">
-                  Swing at 15% speed — forces the motor cortex to consciously map every position
-                </div>
-              </button>
-            </div>
-          </div>
+          <NeuroTrainingToggles
+            microPauseMode={microPauseMode}
+            slowBurn={slowBurn}
+            onMicroPauseChange={setMicroPauseMode}
+            onSlowBurnChange={setSlowBurn}
+          />
 
           <div>
             <Label className="mb-2 block">Block vs random</Label>

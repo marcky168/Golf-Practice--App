@@ -11,6 +11,8 @@ export type StoredMixedConfig = {
   useYardageFilter: boolean;
   minYards: number;
   maxYards: number;
+  microPauseMode?: boolean;
+  slowBurn?: boolean;
 };
 
 export function saveLastMixedConfig(config: Omit<StoredMixedConfig, "title" | "savedAt"> & { title?: string }) {
@@ -25,6 +27,8 @@ export function saveLastMixedConfig(config: Omit<StoredMixedConfig, "title" | "s
       useYardageFilter: config.useYardageFilter,
       minYards: config.minYards,
       maxYards: config.maxYards,
+      microPauseMode: config.microPauseMode,
+      slowBurn: config.slowBurn,
     };
     localStorage.setItem(MIXED_STORAGE_KEY, JSON.stringify(entry));
   } catch {

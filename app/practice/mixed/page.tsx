@@ -16,12 +16,15 @@ import { enrichConfigForSave, timingFromCompletion } from "@/lib/practice/sessio
 import { ResumePrompt, clearPartialSession, type PartialSession } from "@/components/practice/ResumePrompt";
 import { loadLastMixedConfig, saveLastMixedConfig } from "@/lib/practice/last-mixed-config";
 import { unlockPracticeAudio } from "@/lib/practice/feedback";
+import { NeuroTrainingToggles, neuroFlagsFromState } from "@/components/practice/NeuroTrainingToggles";
 
 export default function MixedSessionPage() {
   const [step, setStep] = useState<"config" | "running" | "complete">("config");
   const [duration, setDuration] = useState(60);
   const [selectedAreas, setSelectedAreas] = useState<SkillCategory[]>([]);
   const [restInterval, setRestInterval] = useState<number>(0);
+  const [microPauseMode, setMicroPauseMode] = useState(false);
+  const [slowBurn, setSlowBurn] = useState(false);
 
   // Yardage filter (contextual to focus areas)
   const [useYardageFilter, setUseYardageFilter] = useState(false);
@@ -42,6 +45,8 @@ export default function MixedSessionPage() {
       maxYards: number;
       toastMessage?: string;
       unlockOnStart?: boolean;
+      microPauseMode?: boolean;
+      slowBurn?: boolean;
     }) => {
       if (opts.unlockOnStart !== false) unlockPracticeAudio();
       setRestInterval(opts.restIntervalSeconds);
@@ -52,7 +57,11 @@ export default function MixedSessionPage() {
         minDistance: opts.useYardageFilter ? opts.minYards : undefined,
         maxDistance: opts.useYardageFilter ? opts.maxYards : undefined,
       });
-      setGeneratedConfig(config);
+      const fullConfig = {
+        ...config,
+        ...neuroFlagsFromState(!!opts.microPauseMode, !!opts.slowBurn),
+      };
+      setGeneratedConfig(fullConfig);
       setStep("running");
       saveLastMixedConfig({
         title: config.title,
@@ -62,6 +71,8 @@ export default function MixedSessionPage() {
         useYardageFilter: opts.useYardageFilter,
         minYards: opts.minYards,
         maxYards: opts.maxYards,
+        microPauseMode: opts.microPauseMode,
+        slowBurn: opts.slowBurn,
       });
       toast.success(opts.toastMessage ?? `Mixed session generated — ${config.drills.length} shots`);
       return config;
@@ -84,6 +95,8 @@ export default function MixedSessionPage() {
           setUseYardageFilter(stored.useYardageFilter);
           setMinYards(stored.minYards);
           setMaxYards(stored.maxYards);
+          setMicroPauseMode(!!stored.microPauseMode);
+          setSlowBurn(!!stored.slowBurn);
           runSession(bag, {
             durationMinutes: stored.duration,
             focusAreas: stored.selectedAreas,
@@ -91,6 +104,8 @@ export default function MixedSessionPage() {
             useYardageFilter: stored.useYardageFilter,
             minYards: stored.minYards,
             maxYards: stored.maxYards,
+            microPauseMode: stored.microPauseMode,
+            slowBurn: stored.slowBurn,
             toastMessage: "Repeating last mixed session — fresh shots, same setup",
           });
           const url = new URL(window.location.href);
@@ -118,6 +133,8 @@ export default function MixedSessionPage() {
       useYardageFilter,
       minYards,
       maxYards,
+      microPauseMode,
+      slowBurn,
     });
   };
 
@@ -308,6 +325,13 @@ export default function MixedSessionPage() {
               ))}
             </div>
           </div>
+
+          <NeuroTrainingToggles
+            microPauseMode={microPauseMode}
+            slowBurn={slowBurn}
+            onMicroPauseChange={setMicroPauseMode}
+            onSlowBurnChange={setSlowBurn}
+          />
 
           <Button
             size="lg"

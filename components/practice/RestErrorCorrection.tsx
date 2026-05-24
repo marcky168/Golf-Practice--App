@@ -55,6 +55,7 @@ interface Props {
   isPuttingOrBunker: boolean;
   club?: string;
   distance?: string;
+  drillName?: string;
   correction: RepErrorCorrection;
   onChange: (patch: RepErrorCorrection) => void;
 }
@@ -71,6 +72,7 @@ export function RestErrorCorrection({
   isPuttingOrBunker,
   club,
   distance,
+  drillName,
   correction,
   onChange,
 }: Props) {
@@ -79,10 +81,16 @@ export function RestErrorCorrection({
 
   return (
     <div className="w-full max-w-sm rounded-2xl border bg-card px-4 py-3 text-left mb-5">
-      <div className="text-[11px] tracking-[3px] text-muted-foreground mb-1">
-        2 QUICK CHECKS — LAST SHOT
+      <div className="text-[11px] tracking-[3px] text-violet-600 dark:text-violet-400 mb-1 font-semibold">
+        ADAPTATION SIGNALS — NOT FAILURES
       </div>
+      <p className="text-[10px] text-muted-foreground mb-3 leading-relaxed">
+        Honest partial/miss taps gate dopamine for learning. Your brain needs these signals to adapt.
+      </p>
 
+      {drillName && (
+        <p className="text-sm font-semibold text-foreground mb-0.5">{drillName}</p>
+      )}
       {(club || distance) && (
         <p className="text-xs text-muted-foreground mb-2">
           {club}

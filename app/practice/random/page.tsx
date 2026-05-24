@@ -18,6 +18,7 @@ import { ResumePrompt, clearPartialSession, type PartialSession } from "@/compon
 import { savePracticeSession, getClubBag } from "@/app/actions";
 import { enrichConfigForSave, timingFromCompletion } from "@/lib/practice/session-save";
 import { unlockPracticeAudio } from "@/lib/practice/feedback";
+import { NeuroTrainingToggles, neuroFlagsFromState } from "@/components/practice/NeuroTrainingToggles";
 
 type Intention  = { shape: ShapeType; trajectory: TrajectoryType };
 type BagEntry   = { club: string; carry: number };
@@ -49,6 +50,8 @@ export default function RandomPracticePage() {
   const [drillIntentions, setDrillIntentions] = useState<Intention[]>([]);
   const [resumeData, setResumeData] = useState<PartialSession | null>(null);
   const [restInterval, setRestInterval] = useState<number>(0);
+  const [microPauseMode, setMicroPauseMode] = useState(false);
+  const [slowBurn, setSlowBurn] = useState(false);
   const [userBag, setUserBag] = useState<BagEntry[]>([]);
 
   useEffect(() => {
@@ -76,7 +79,7 @@ export default function RandomPracticePage() {
       maxDistance: useYardageFilter ? maxYards : undefined,
     });
 
-    setGeneratedConfig(config);
+    setGeneratedConfig({ ...config, ...neuroFlagsFromState(microPauseMode, slowBurn) });
     setDrillIntentions(config.drills.map(randomIntention));
     setStep("running");
     const warm = config.warmupShotCount ?? 0;
@@ -313,6 +316,13 @@ export default function RandomPracticePage() {
               ))}
             </div>
           </div>
+
+          <NeuroTrainingToggles
+            microPauseMode={microPauseMode}
+            slowBurn={slowBurn}
+            onMicroPauseChange={setMicroPauseMode}
+            onSlowBurnChange={setSlowBurn}
+          />
 
           {/* Preview info */}
           <Card className="bg-muted/50 border-none">

@@ -263,3 +263,42 @@ export function notifyCadenceTick() {
 export function primePracticeAudio(): void {
   void resumeAudioContext();
 }
+
+/** Spoken cue for micro-pause neural replay (requires prior unlockPracticeAudio tap) */
+export function speakPracticePrompt(text: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    const synth = window.speechSynthesis;
+    if (!synth) return;
+    synth.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.rate = 0.92;
+    utter.pitch = 1;
+    utter.volume = 1;
+    synth.speak(utter);
+  } catch {
+    // ignore — visual prompt still shows
+  }
+}
+
+export function playMicroPauseStartSound() {
+  void withRunningContext(
+    ctx => {
+      playOscillator(ctx, { freq: 440, duration: 0.15, gain: 0.12, type: "sine" });
+    },
+    "tick"
+  );
+}
+
+/** Arena: neutral "miss noted" tone — lower than the success chime, not harsh */
+export function playArenaMissSound() {
+  void withRunningContext(
+    ctx => {
+      playOscillator(ctx, { freq: 330, duration: 0.22, gain: 0.18, type: "sine" });
+    },
+    "tick"
+  );
+  if (typeof navigator !== "undefined" && navigator.vibrate) {
+    navigator.vibrate(50);
+  }
+}
