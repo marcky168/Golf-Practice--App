@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft, BarChart3 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { WeakSpotsPanel } from "@/components/practice/WeakSpotsPanel";
+import { ShortGameInsightsPanel } from "@/components/practice/ShortGameInsightsPanel";
 import {
   computeWeakSpotsByClub,
   computeWeakSpotsByShape,
@@ -11,6 +12,7 @@ import {
   computePreSessionCorrelation,
   computeBlockConsistencyTrend,
   computeLeastPracticedClubs,
+  computeScenarioClubInsights,
 } from "@/lib/practice/insights";
 import type { SessionConfig } from "@/lib/practice/types";
 
@@ -59,6 +61,7 @@ export default async function InsightsPage() {
   const preSessionCorr     = computePreSessionCorrelation(sessions);
   const blockConsistency   = computeBlockConsistencyTrend(sessions);
   const leastPracticed     = computeLeastPracticedClubs(sessions, bagClubs);
+  const scenarioInsights   = computeScenarioClubInsights(sessions);
 
   return (
     <div className="min-h-screen bg-background pb-20 max-w-2xl mx-auto px-4 pt-6">
@@ -88,6 +91,16 @@ export default async function InsightsPage() {
         leastPracticed={leastPracticed}
         totalRepsLogged={totalRepsLogged}
       />
+
+      {/* Short game: club choice by lie type */}
+      <div className="mt-10">
+        <h2 className="text-xl font-semibold tracking-tight mb-1">Short Game — Club by Lie</h2>
+        <p className="text-sm text-muted-foreground mb-5">
+          Which clubs actually work best for each lie condition around the green,
+          based on your own practice outcomes.
+        </p>
+        <ShortGameInsightsPanel insights={scenarioInsights} />
+      </div>
     </div>
   );
 }

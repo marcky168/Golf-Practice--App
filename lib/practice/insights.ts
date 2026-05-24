@@ -257,3 +257,95 @@ export function hitRateBarColor(rate: number): string {
   if (rate >= 50) return "bg-orange-500";
   return "bg-rose-500";
 }
+
+// ── Short-game scenario club insights ─────────────────────────────────────────
+
+export type ScenarioClubStats = {
+  club: string;
+  totalReps: number;
+  goodCount: number;
+  mishitCount: number;
+  wrongClubCount: number;
+  successRate: number; // 0–100
+};
+
+export type LieInsight = {
+  lie: string;
+  totalReps: number;
+  clubs: ScenarioClubStats[];  // sorted by totalReps desc
+  bestClub: string | null;     // highest success rate (min 2 reps)
+  mostUsed: string | null;     // most frequently reached for
+  insight: string | null;      // actionable coaching observation
+};
+
+export function computeScenarioClubInsights(sessions: SessionRow[]): LieInsight[] {
+  // lie → club → counts
+  const map = new Map<string, Map<string, { good: number; mishit: number; wrong: number }>>();
+
+  for (const session of sessions) {
+    for (const rep of session.config?.repRecords ?? []) {
+      if (!rep.drill?.scenarioBased || !rep.scenarioClub) continue;
+      const lie = rep.drill.name;
+      if (!lie) continue;
+
+      if (!map.has(lie)) map.set(lie, new Map());
+      const lieMap = map.get(lie)!;
+      if (!lieMap.has(rep.scenarioClub)) {
+        lieMap.set(rep.scenarioClub, { good: 0, mishit: 0, wrong: 0 });
+      }
+      const e = lieMap.get(rep.scenarioClub)!;
+      if (rep.scenarioOutcome === "good")       e.good   += 1;
+      else if (rep.scenarioOutcome === "mishit") e.mishit += 1;
+      else if (rep.scenarioOutcome === "wrong-club") e.wrong += 1;
+    }
+  }
+
+  const insights: LieInsight[] = [];
+
+  for (const [lie, clubMap] of map) {
+    const clubs: ScenarioClubStats[] = [...clubMap.entries()]
+      .map(([club, c]) => {
+        const total = c.good + c.mishit + c.wrong;
+        return {
+          club,
+          totalReps:      total,
+          goodCount:      c.good,
+          mishitCount:    c.mishit,
+          wrongClubCount: c.wrong,
+          successRate:    total > 0 ? Math.round((c.good / total) * 100) : 0,
+        };
+      })
+      .filter(c => c.totalReps >= 2)
+      .sort((a, b) => b.totalReps - a.totalReps);
+
+    const totalReps = clubs.reduce((s, c) => s + c.totalReps, 0);
+    if (totalReps < 3) continue;
+
+    const mostUsed = clubs[0]?.club ?? null;
+    const bestClub = [...clubs]
+      .sort((a, b) => b.successRate - a.successRate)[0]?.club ?? null;
+
+    // Coaching insight
+    let insight: string | null = null;
+    const mostUsedStats = clubs.find(c => c.club === mostUsed);
+    const bestStats     = clubs.find(c => c.club === bestClub);
+
+    if (mostUsed && bestClub && mostUsed !== bestClub && mostUsedStats && bestStats) {
+      const diff = bestStats.successRate - mostUsedStats.successRate;
+      if (diff >= 15) {
+        insight = `Your ${bestClub} outperforms your go-to ${mostUsed} here `
+          + `(${bestStats.successRate}% vs ${mostUsedStats.successRate}%) — try making it your first choice.`;
+      }
+    } else if (mostUsedStats) {
+      if (mostUsedStats.successRate >= 75) {
+        insight = `${mostUsed} is your most reliable club from this lie at ${mostUsedStats.successRate}% — trust it.`;
+      } else if (mostUsedStats.successRate < 45 && totalReps >= 5) {
+        insight = `${mostUsed} is struggling here at ${mostUsedStats.successRate}% — experiment with a different club next session.`;
+      }
+    }
+
+    insights.push({ lie, totalReps, clubs, bestClub, mostUsed, insight });
+  }
+
+  return insights.sort((a, b) => b.totalReps - a.totalReps);
+}
