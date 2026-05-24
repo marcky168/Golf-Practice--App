@@ -51,7 +51,14 @@ export async function getAuthUser(): Promise<User | null> {
     if (error) return null;
     return user;
   } catch (err) {
-    console.error("[supabase/server] getAuthUser failed:", err);
+    // Expected when Next tries static analysis without a request (build-time prerender)
+    const message = err instanceof Error ? err.message : String(err);
+    const isDynamicUsage =
+      message.includes("Dynamic server usage") ||
+      (err instanceof Error && "digest" in err && err.digest === "DYNAMIC_SERVER_USAGE");
+    if (!isDynamicUsage) {
+      console.error("[supabase/server] getAuthUser failed:", err);
+    }
     return null;
   }
 }

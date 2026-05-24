@@ -30,6 +30,9 @@ export const viewport: Viewport = {
   colorScheme: "light dark",
 };
 
+/** Auth header reads cookies — opt out of static prerender for all routes */
+export const dynamic = "force-dynamic";
+
 export default async function RootLayout({
   children,
 }: {
