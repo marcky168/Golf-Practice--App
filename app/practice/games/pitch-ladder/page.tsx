@@ -77,7 +77,7 @@ export default function PitchLadderGame() {
 
     if (ballsAtCurrent + 1 < 3) {
       if (restInterval > 0) setIsResting(true);
-    } else if (currentDistanceIndex < PITCH_LADDER_DISTANCES.length - 1) {
+    } else if (currentDistanceIndex < distances.length - 1) {
       setCurrentDistanceIndex(currentDistanceIndex + 1);
       if (restInterval > 0) setIsResting(true);
     } else {
