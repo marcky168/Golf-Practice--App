@@ -292,7 +292,10 @@ export function SessionRunner({
   }, []);
 
   // Intention logic — perRepIntentions (random mode) overrides fixed session intention
-  const skipIntention = currentDrill?.category === 'putting' || currentDrill?.category === 'bunker';
+  // Scenario-based drills skip intention: player freely chooses club and shot type.
+  const skipIntention = currentDrill?.category === 'putting'
+    || currentDrill?.category === 'bunker'
+    || currentDrill?.scenarioBased === true;
   const perRep = config.perRepIntentions ?? drillIntentions;
   const repIntention = perRep?.[currentIndex] ?? null;
   const presetIntention: Intention | null = skipIntention
@@ -712,14 +715,23 @@ export function SessionRunner({
             {nextDrill && (
               <div className='bg-card border rounded-2xl px-6 py-4 mb-8 text-left w-full max-w-sm'>
                 <div className='text-xs text-muted-foreground tracking-widest mb-2'>
-                  {nextIsWarmup ? 'NEXT — WARM-UP' : 'NEXT — PRACTICE'}
+                  {nextIsWarmup ? 'NEXT — WARM-UP' : nextDrill.scenarioBased ? 'NEXT — SCENARIO' : 'NEXT — PRACTICE'}
                 </div>
-                <div className='text-xl font-semibold'>{nextDrill.club} — {nextDrill.distance}</div>
-                {nextDrill.name && (
-                  <div className='text-sm text-muted-foreground mt-1'>{nextDrill.name}</div>
+                {nextDrill.scenarioBased ? (
+                  <>
+                    <div className='text-base font-semibold leading-snug'>{nextDrill.name}</div>
+                    <div className='text-sm text-muted-foreground mt-1'>{nextDrill.distance} · {nextDrill.target}</div>
+                  </>
+                ) : (
+                  <>
+                    <div className='text-xl font-semibold'>{nextDrill.club} — {nextDrill.distance}</div>
+                    {nextDrill.name && (
+                      <div className='text-sm text-muted-foreground mt-1'>{nextDrill.name}</div>
+                    )}
+                    {nextDrill.target && <div className='text-muted-foreground text-sm mt-0.5'>{nextDrill.target}</div>}
+                  </>
                 )}
-                {nextDrill.target && <div className='text-muted-foreground text-sm mt-0.5'>{nextDrill.target}</div>}
-                {(() => {
+                {!nextDrill.scenarioBased && (() => {
                   const nextIdx = currentIndex + 1;
                   const nextIntent =
                     perRep?.[nextIdx] ??
@@ -871,21 +883,53 @@ export function SessionRunner({
             )}
           </div>
 
-          <div className='w-full max-w-md mb-8'>
-            <div className='uppercase tracking-[2px] text-xs text-muted-foreground mb-2'>
-              {isInWarmup ? 'Warm-up shot' : 'Practice shot'}
+          {currentDrill.scenarioBased ? (
+            /* ── Scenario drill: lie/distance/green problem — player chooses shot ── */
+            <div className='w-full max-w-md mb-8'>
+              <div className='uppercase tracking-[2px] text-xs text-muted-foreground mb-2'>
+                Short game scenario
+              </div>
+              <div className='text-2xl font-semibold tracking-tight mb-3'>
+                {currentDrill.name}
+              </div>
+              <div className='grid grid-cols-2 gap-2 mb-3'>
+                <div className='bg-card border rounded-xl px-3 py-2.5'>
+                  <div className='text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5'>Distance</div>
+                  <div className='text-xl font-bold tabular-nums'>{currentDrill.distance}</div>
+                </div>
+                <div className='bg-card border rounded-xl px-3 py-2.5'>
+                  <div className='text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5'>Green</div>
+                  <div className='text-sm font-medium leading-snug'>{currentDrill.target}</div>
+                </div>
+              </div>
+              {currentDrill.instructions && (
+                <div className='rounded-xl border border-amber-200/60 bg-amber-50/80 dark:bg-amber-950/30 dark:border-amber-800/50 px-4 py-2.5'>
+                  <div className='text-[10px] uppercase tracking-wider text-amber-700 dark:text-amber-400 mb-0.5'>Lie note</div>
+                  <div className='text-sm text-amber-900 dark:text-amber-200 italic leading-snug'>{currentDrill.instructions}</div>
+                </div>
+              )}
+              <div className='text-xs text-muted-foreground mt-3 text-center'>
+                Choose your own club and shot type
+              </div>
             </div>
-            <div className='text-3xl font-semibold tracking-tighter mb-1'>
-              {currentDrill.club} — {currentDrill.distance}
+          ) : (
+            /* ── Standard drill: prescribed club and distance ── */
+            <div className='w-full max-w-md mb-8'>
+              <div className='uppercase tracking-[2px] text-xs text-muted-foreground mb-2'>
+                {isInWarmup ? 'Warm-up shot' : 'Practice shot'}
+              </div>
+              <div className='text-3xl font-semibold tracking-tighter mb-1'>
+                {currentDrill.club} — {currentDrill.distance}
+              </div>
+              {currentDrill.name && (
+                <div className='text-sm font-medium text-muted-foreground mb-1'>{currentDrill.name}</div>
+              )}
+              <div className='text-xl text-muted-foreground'>{currentDrill.target || 'Pick a precise target'}</div>
+              {currentDrill.instructions && (
+                <div className='text-sm text-muted-foreground mt-2 italic'>{currentDrill.instructions}</div>
+              )}
             </div>
-            {currentDrill.name && (
-              <div className='text-sm font-medium text-muted-foreground mb-1'>{currentDrill.name}</div>
-            )}
-            <div className='text-xl text-muted-foreground'>{currentDrill.target || 'Pick a precise target'}</div>
-            {currentDrill.instructions && (
-              <div className='text-sm text-muted-foreground mt-2 italic'>{currentDrill.instructions}</div>
-            )}
-          </div>
+          )}
 
           {!isInWarmup && (
             <div className='w-full max-w-md mb-10'>

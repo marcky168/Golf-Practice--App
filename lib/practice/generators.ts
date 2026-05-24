@@ -1,5 +1,6 @@
 import { ALL_DRILLS, getDrillsByCategory } from "./drills";
 import { Drill, SessionConfig, SkillCategory } from "./types";
+import { generateChippingScenario } from "./chipping-scenarios";
 import {
   type BagEntry,
   clubInBag,
@@ -266,6 +267,14 @@ export function attachWarmupToSession(
     return config;
   }
 
+  // Short-game / putting / bunker sessions don't need a warm-up phase —
+  // chipping IS its own warm-up, and adding full-swing wedge drills first
+  // disrupts the feel calibration the session is designed to build.
+  const SHORT_GAME_AREAS = new Set(["short-game", "putting", "bunker"]);
+  const isShortGameOnly = config.focusAreas.length > 0 &&
+    config.focusAreas.every(a => SHORT_GAME_AREAS.has(a));
+  if (isShortGameOnly) return config;
+
   const areas = config.focusAreas?.length ? config.focusAreas : DEFAULT_WARMUP_AREAS;
   const warmup = generateRandomWarmupDrills({
     count: options.warmupShots ?? 10,
@@ -368,15 +377,23 @@ export function generateRandomSession(options: {
   const usedLast: string[] = [];
 
   for (let i = 0; i < numShots; i++) {
-    const category   = areas[Math.floor(Math.random() * areas.length)];
-    const catPool    = allDrills
+    const category = areas[Math.floor(Math.random() * areas.length)];
+
+    // Short-game drills are scenario-based — player chooses their own club
+    // and shot type from a presented lie/distance/green problem.
+    if (category === "short-game") {
+      drills.push(generateChippingScenario(`random-chip-${i}-${Date.now()}`));
+      continue;
+    }
+
+    const catPool = allDrills
       .filter(d => d.category === category)
       .filter(d => !usedLast.includes(d.club + (d.target ?? "")))
       .filter(d => {
         const dYards = parseDrillDistance(d);
         return dYards >= minDist && dYards <= maxDist;
       });
-    const pool       = filterByBag(catPool);
+    const pool = filterByBag(catPool);
 
     let chosen: Drill;
     if (pool.length > 0) {

@@ -35,6 +35,8 @@ export interface Drill {
   lie?: "fairway" | "rough" | "uphill" | "sidehill" | "bunker" | "green";
   instructions?: string;           // What the golfer should focus on / do
   reps?: number;                   // Suggested reps for block use
+  /** When true: app presents a lie/distance/green scenario; player chooses their own club and shot */
+  scenarioBased?: boolean;
 }
 
 /** Simplified skill focus for Practice Builder */
