@@ -70,6 +70,10 @@ export interface RepErrorCorrection {
   hitIntendedShot?: CorrectionAnswer;
   /** Executed the session focus cue */
   focusCueMatch?: CorrectionAnswer;
+  /** Direction of start-line miss — captured when startedOnLine is partial/no */
+  startDirection?: "left" | "right";
+  /** Distance control — was the shot short or long of target */
+  distanceMiss?: "short" | "long";
 }
 
 export interface RepRecordSnapshot {
@@ -123,6 +127,8 @@ export interface SessionConfig {
     partial: number;
     no: number;
   };
+  /** Pre-session self-rating captured before the first shot */
+  preSessionState?: { energy: number; focus: number };
 }
 
 export interface PracticeSession {

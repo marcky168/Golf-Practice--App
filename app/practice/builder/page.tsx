@@ -29,6 +29,7 @@ import type { BuilderFocus, BuilderPracticeMode, SessionConfig, SwingLength } fr
 import { NeuroTrainingToggles, neuroFlagsFromState } from "@/components/practice/NeuroTrainingToggles";
 import { SessionRunner } from "@/components/practice/SessionRunner";
 import { SessionRunnerErrorBoundary } from "@/components/practice/SessionRunnerErrorBoundary";
+import { PreSessionRating } from "@/components/practice/PreSessionRating";
 import { IntentionPicker, type ShapeType, type TrajectoryType } from "@/components/practice/IntentionPicker";
 import { ResumePrompt, clearPartialSession, type PartialSession } from "@/components/practice/ResumePrompt";
 import { savePracticeSession, getClubBag } from "@/app/actions";
@@ -42,7 +43,7 @@ import {
   presetNeedsIntention,
 } from "@/lib/practice/block-drills";
 
-type FlowStep = "wizard" | "running" | "complete";
+type FlowStep = "wizard" | "pre-session" | "running" | "complete";
 type EntryMode = "custom" | "library";
 
 const PRACTICE_MODES: { value: BuilderPracticeMode; label: string; hint: string }[] = [
@@ -216,7 +217,7 @@ export default function PracticeBuilderPage() {
       ...neuroFlagsFromState(microPauseMode, slowBurn),
     };
     setSessionConfig(config);
-    setStep("running");
+    setStep("pre-session");
     saveRepeatableSession(config);
     toast.success(`${totalBalls} balls · ${numBlocks} blocks · ${cadenceSeconds}s cadence`);
   }
@@ -661,6 +662,18 @@ export default function PracticeBuilderPage() {
           )}
         </div>
       </div>
+    );
+  }
+
+  if (step === "pre-session" && sessionConfig) {
+    return (
+      <PreSessionRating
+        onComplete={(energy, focus) => {
+          setSessionConfig(prev => prev ? { ...prev, preSessionState: { energy, focus } } : prev);
+          setStep("running");
+        }}
+        onSkip={() => setStep("running")}
+      />
     );
   }
 

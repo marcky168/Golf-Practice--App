@@ -76,7 +76,12 @@ export default async function HistoryPage() {
         <>
         <Card className="golf-card mb-8">
           <CardContent className="p-6">
-            <h2 className="text-xl font-semibold tracking-tight mb-1">Trends</h2>
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-xl font-semibold tracking-tight">Trends</h2>
+              <Link href="/insights" className="text-sm text-primary hover:underline">
+                Shot Insights →
+              </Link>
+            </div>
             <p className="text-sm text-muted-foreground mb-6">
               Shot ratings and block consistency over time — block practice pays off here.
             </p>

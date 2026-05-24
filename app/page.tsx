@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Target, Clock, Flame, TrendingUp } from "lucide-react";
+import { Target, Clock, Flame, TrendingUp, BarChart3, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { format, subMonths } from "date-fns";
 import { getUserSessions } from "@/app/actions";
@@ -156,6 +156,26 @@ export default async function GolfPracticeOSDashboard() {
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {/* Insights shortcut — visible once user has sessions */}
+        {user && completedSessions.length >= 3 && (
+          <Link href="/insights">
+            <Card className="border-l-4 border-l-violet-400 hover:shadow-md transition cursor-pointer">
+              <CardContent className="pt-5 pb-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-violet-100 dark:bg-violet-950/40 flex items-center justify-center shrink-0">
+                    <BarChart3 className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold">Shot Insights</div>
+                    <div className="text-sm text-muted-foreground">Weak spots by club, shape &amp; time of day</div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
         )}
 
         {/* Real Stats Row */}

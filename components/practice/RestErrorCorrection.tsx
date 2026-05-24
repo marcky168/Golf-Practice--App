@@ -9,6 +9,10 @@ export type RepErrorCorrection = {
   trajectoryMatch?: CorrectionAnswer;
   hitIntendedShot?: CorrectionAnswer;
   focusCueMatch?: CorrectionAnswer;
+  /** Direction of start-line miss — captured when startedOnLine is partial/no */
+  startDirection?: "left" | "right";
+  /** Distance control miss — short or long of target */
+  distanceMiss?: "short" | "long";
 };
 
 const ANSWERS: { value: CorrectionAnswer; label: string }[] = [
@@ -49,6 +53,70 @@ function QuestionRow({
   );
 }
 
+function DirectionRow({
+  value,
+  onChange,
+}: {
+  value?: "left" | "right";
+  onChange: (v: "left" | "right") => void;
+}) {
+  return (
+    <div className="flex gap-2 pt-1">
+      {(["left", "right"] as const).map(dir => (
+        <button
+          key={dir}
+          type="button"
+          onClick={() => onChange(dir)}
+          className={`flex-1 rounded-lg border py-1.5 text-xs font-semibold transition active:scale-[0.985] ${
+            value === dir
+              ? "bg-primary text-primary-foreground border-primary"
+              : "bg-muted/60 hover:bg-muted border-border"
+          }`}
+        >
+          {dir === "left" ? "← Started left" : "Started right →"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function DistanceRow({
+  value,
+  onChange,
+}: {
+  value?: "short" | "long";
+  onChange: (v: "short" | "long") => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 pt-2 border-t border-border/40">
+      <span className="text-[11px] text-muted-foreground shrink-0">Distance:</span>
+      {(["short", "long"] as const).map(d => (
+        <button
+          key={d}
+          type="button"
+          onClick={() => onChange(value === d ? undefined as any : d)}
+          className={`flex-1 rounded-lg border py-1 text-xs font-medium transition active:scale-[0.985] ${
+            value === d
+              ? "bg-primary text-primary-foreground border-primary"
+              : "bg-muted/60 hover:bg-muted border-border"
+          }`}
+        >
+          {d === "short" ? "Short" : "Long"}
+        </button>
+      ))}
+      {value && (
+        <button
+          type="button"
+          onClick={() => onChange(undefined as any)}
+          className="text-[10px] text-muted-foreground hover:text-foreground"
+        >
+          ✕
+        </button>
+      )}
+    </div>
+  );
+}
+
 interface Props {
   focusCue: string;
   intention?: { shape: ShapeType; trajectory: TrajectoryType } | null;
@@ -60,12 +128,6 @@ interface Props {
   onChange: (patch: RepErrorCorrection) => void;
 }
 
-/**
- * Two quick checks during rest — tuned for short cadence windows:
- * 1) Execution vs intention (line or shot outcome)
- * 2) Process: focus cue commitment
- * Trajectory is shown in the intention chip but not asked separately (saves time; overall line + cue cover most errors).
- */
 export function RestErrorCorrection({
   focusCue,
   intention,
@@ -78,6 +140,11 @@ export function RestErrorCorrection({
 }: Props) {
   const merge = (patch: RepErrorCorrection) => onChange({ ...correction, ...patch });
   const hasShapeIntention = !isPuttingOrBunker && !!intention;
+
+  // Show direction follow-up when startedOnLine is answered as partial/no
+  const showDirection =
+    hasShapeIntention &&
+    (correction.startedOnLine === "no" || correction.startedOnLine === "partial");
 
   return (
     <div className="w-full max-w-sm rounded-2xl border bg-card px-4 py-3 text-left mb-5">
@@ -117,23 +184,37 @@ export function RestErrorCorrection({
       )}
 
       <div className="space-y-3">
-        {hasShapeIntention && intention ? (
-          <QuestionRow
-            prompt={`Start on your ${intention.shape} line?`}
-            value={correction.startedOnLine}
-            onChange={v => merge({ startedOnLine: v })}
-          />
-        ) : (
-          <QuestionRow
-            prompt="Execute the shot you intended?"
-            value={correction.hitIntendedShot}
-            onChange={v => merge({ hitIntendedShot: v })}
-          />
-        )}
+        <div>
+          {hasShapeIntention && intention ? (
+            <QuestionRow
+              prompt={`Start on your ${intention.shape} line?`}
+              value={correction.startedOnLine}
+              onChange={v => merge({ startedOnLine: v, startDirection: undefined })}
+            />
+          ) : (
+            <QuestionRow
+              prompt="Execute the shot you intended?"
+              value={correction.hitIntendedShot}
+              onChange={v => merge({ hitIntendedShot: v })}
+            />
+          )}
+          {showDirection && (
+            <DirectionRow
+              value={correction.startDirection}
+              onChange={v => merge({ startDirection: v })}
+            />
+          )}
+        </div>
+
         <QuestionRow
           prompt="Committed to your focus cue?"
           value={correction.focusCueMatch}
           onChange={v => merge({ focusCueMatch: v })}
+        />
+
+        <DistanceRow
+          value={correction.distanceMiss}
+          onChange={v => merge({ distanceMiss: v })}
         />
       </div>
 

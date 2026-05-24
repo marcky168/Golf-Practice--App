@@ -1,0 +1,237 @@
+"use client";
+
+import type {
+  WeakSpotRow,
+  TimeOfDayRow,
+  PreSessionRow,
+} from "@/lib/practice/insights";
+import { directionInsight, hitRateColor, hitRateBarColor } from "@/lib/practice/insights";
+
+// ── Shared sub-components ─────────────────────────────────────────────────────
+
+function HitRateBar({ rate }: { rate: number }) {
+  return (
+    <div className="flex items-center gap-2 flex-1">
+      <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all ${hitRateBarColor(rate)}`}
+          style={{ width: `${rate}%` }}
+        />
+      </div>
+      <span className={`text-sm font-semibold tabular-nums w-9 text-right ${hitRateColor(rate)}`}>
+        {rate}%
+      </span>
+    </div>
+  );
+}
+
+function SectionHeader({ title, sub }: { title: string; sub?: string }) {
+  return (
+    <div className="mb-3">
+      <h3 className="font-semibold text-base tracking-tight">{title}</h3>
+      {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
+    </div>
+  );
+}
+
+function WeakSpotList({ rows, emptyMsg }: { rows: WeakSpotRow[]; emptyMsg: string }) {
+  if (rows.length === 0) {
+    return <p className="text-sm text-muted-foreground py-2">{emptyMsg}</p>;
+  }
+  return (
+    <div className="space-y-3">
+      {rows.map(row => {
+        const direction = directionInsight(row);
+        return (
+          <div key={row.key}>
+            <div className="flex items-center gap-3 mb-1">
+              <span className="text-sm font-medium w-32 shrink-0 truncate">{row.label}</span>
+              <HitRateBar rate={row.hitRate} />
+              <span className="text-[11px] text-muted-foreground w-16 text-right shrink-0">
+                {row.totalReps} rep{row.totalReps !== 1 ? "s" : ""}
+              </span>
+            </div>
+            {direction && (
+              <p className="text-[11px] text-amber-700 dark:text-amber-400 ml-32 pl-3">
+                ↳ {direction}
+              </p>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Main panel ────────────────────────────────────────────────────────────────
+
+interface Props {
+  byClub:              WeakSpotRow[];
+  byShape:             WeakSpotRow[];
+  byClubShape:         WeakSpotRow[];
+  timeOfDay:           TimeOfDayRow[];
+  preSessionCorr:      PreSessionRow[];
+  totalRepsLogged:     number;
+}
+
+export function WeakSpotsPanel({
+  byClub,
+  byShape,
+  byClubShape,
+  timeOfDay,
+  preSessionCorr,
+  totalRepsLogged,
+}: Props) {
+  if (totalRepsLogged < 5) {
+    return (
+      <div className="rounded-2xl border bg-muted/30 px-5 py-8 text-center">
+        <p className="text-muted-foreground text-sm max-w-xs mx-auto">
+          Complete a few sessions with rest-timer feedback enabled — insights appear once
+          you have at least 5 rated shots logged.
+        </p>
+      </div>
+    );
+  }
+
+  const bestTime  = [...timeOfDay].sort((a, b) => (b.avgRating ?? 0) - (a.avgRating ?? 0))[0];
+  const worstClub = byClub[0];
+  const hasPreSession = preSessionCorr.length >= 2;
+
+  return (
+    <div className="space-y-8">
+      {/* ── Top callout ─────────────────────────────────────────────── */}
+      {(worstClub || bestTime?.avgRating) && (
+        <div className="rounded-2xl border border-amber-200/60 bg-amber-50/80 dark:bg-amber-950/30 dark:border-amber-800/50 px-5 py-4 space-y-1.5">
+          <div className="text-[10px] font-bold tracking-[0.2em] uppercase text-amber-700 dark:text-amber-400">
+            Priority actions
+          </div>
+          {worstClub && (
+            <p className="text-sm">
+              <span className="font-semibold">{worstClub.label}</span>
+              {" "}is your weakest club at{" "}
+              <span className={`font-semibold ${hitRateColor(worstClub.hitRate)}`}>
+                {worstClub.hitRate}% hit rate
+              </span>
+              {" "}— practice this specifically next session.
+            </p>
+          )}
+          {bestTime?.avgRating && (
+            <p className="text-sm text-muted-foreground">
+              You perform best in the{" "}
+              <span className="font-medium text-foreground">{bestTime.label.toLowerCase()}</span>
+              {" "}({bestTime.avgRating}/5 avg rating).
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* ── By Club ─────────────────────────────────────────────────── */}
+      <div>
+        <SectionHeader
+          title="By club"
+          sub="Hit rate = shots where you executed the intended shot. Min 3 reps to appear."
+        />
+        <WeakSpotList
+          rows={byClub}
+          emptyMsg="No club data yet — use rest-timer sessions to log error corrections per shot."
+        />
+      </div>
+
+      {/* ── By Shape ────────────────────────────────────────────────── */}
+      {byShape.length > 0 && (
+        <div>
+          <SectionHeader
+            title="By shot shape"
+            sub="Which intended shape is hardest to execute consistently."
+          />
+          <WeakSpotList rows={byShape} emptyMsg="" />
+        </div>
+      )}
+
+      {/* ── Club + Shape combos ──────────────────────────────────────── */}
+      {byClubShape.length > 0 && (
+        <div>
+          <SectionHeader
+            title="Specific weak spots"
+            sub="Club + shape combos with 3+ reps. These are your highest-value practice targets."
+          />
+          <WeakSpotList rows={byClubShape.slice(0, 6)} emptyMsg="" />
+        </div>
+      )}
+
+      {/* ── Time of day ──────────────────────────────────────────────── */}
+      <div>
+        <SectionHeader
+          title="Time of day"
+          sub="Average shot rating by when you practice. Lower = worth investigating."
+        />
+        <div className="space-y-2">
+          {timeOfDay.map(row => (
+            <div key={row.label} className="flex items-center gap-3">
+              <span className="text-sm w-24 shrink-0">{row.label}</span>
+              {row.avgRating !== null ? (
+                <>
+                  <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary rounded-full"
+                      style={{ width: `${(row.avgRating / 5) * 100}%` }}
+                    />
+                  </div>
+                  <span className="text-sm font-semibold tabular-nums text-right w-14 shrink-0">
+                    {row.avgRating}/5
+                  </span>
+                  <span className="text-xs text-muted-foreground w-20 shrink-0 text-right">
+                    {row.sessionCount} session{row.sessionCount !== 1 ? "s" : ""}
+                  </span>
+                </>
+              ) : (
+                <span className="text-xs text-muted-foreground">No data yet</span>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Pre-session state ─────────────────────────────────────────── */}
+      {hasPreSession ? (
+        <div>
+          <SectionHeader
+            title="Energy vs performance"
+            sub="Average shot rating by your pre-session energy level. See what state produces your best golf."
+          />
+          <div className="space-y-2">
+            {preSessionCorr.map(row => (
+              <div key={row.energyLevel} className="flex items-center gap-3">
+                <span className="text-sm w-24 shrink-0">Energy {row.energyLevel}/5</span>
+                {row.avgRating !== null ? (
+                  <>
+                    <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-amber-500 rounded-full"
+                        style={{ width: `${(row.avgRating / 5) * 100}%` }}
+                      />
+                    </div>
+                    <span className="text-sm font-semibold tabular-nums text-right w-14 shrink-0">
+                      {row.avgRating}/5
+                    </span>
+                    <span className="text-xs text-muted-foreground w-20 shrink-0 text-right">
+                      {row.sessionCount} session{row.sessionCount !== 1 ? "s" : ""}
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-xs text-muted-foreground">No shots rated</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-dashed px-4 py-3 text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">Energy vs performance</span>
+          {" "}— rate your energy before each session to unlock this correlation.
+          Starts populating after 2+ sessions with pre-session check-ins.
+        </div>
+      )}
+    </div>
+  );
+}

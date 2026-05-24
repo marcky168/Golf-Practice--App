@@ -49,6 +49,7 @@ type ShotResult = {
   target: string;
   outcome: "hit" | "miss";
   errorType?: string;
+  actualDirection?: "left" | "straight" | "right";
   shape?: ShapeType;
   trajectory?: TrajectoryType;
 };
@@ -144,6 +145,7 @@ export default function Arena3Hole() {
   const [pendingShape, setPendingShape] = useState<ShapeType | null>(null);
   const [pendingTrajectory, setPendingTrajectory] = useState<TrajectoryType | null>(null);
   const [pendingMiss, setPendingMiss] = useState<ShotResult | null>(null);
+  const [selectedErrorType, setSelectedErrorType] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
   const sessionStartedAtRef = useSessionStartedAt(phase !== "setup");
@@ -231,11 +233,12 @@ export default function Arena3Hole() {
     setPhase("error-pick");
   }
 
-  function logError(errorType: string) {
+  function logError(errorType: string, actualDirection?: "left" | "straight" | "right") {
     if (!pendingMiss) return;
     notifyCadenceTick();
-    const result: ShotResult = { ...pendingMiss, errorType };
+    const result: ShotResult = { ...pendingMiss, errorType, actualDirection };
     setPendingMiss(null);
+    setSelectedErrorType(null);
     setPhase("playing");
     completeShot([...results, result]);
   }
@@ -444,19 +447,47 @@ export default function Arena3Hole() {
 
             <div className="space-y-2">
               {ERROR_TYPES.map(e => (
-                <button
-                  key={e.id}
-                  onClick={() => logError(e.id)}
-                  className="w-full text-left rounded-xl border bg-card px-4 py-3.5 hover:border-primary hover:bg-primary/5 transition active:scale-[0.985]"
-                >
-                  <div className="font-semibold">{e.label}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">{e.detail}</div>
-                </button>
+                <div key={e.id}>
+                  <button
+                    onClick={() => {
+                      if (e.id === "start-line") {
+                        setSelectedErrorType(prev => prev === "start-line" ? null : "start-line");
+                      } else {
+                        logError(e.id);
+                      }
+                    }}
+                    className={`w-full text-left rounded-xl border px-4 py-3.5 transition active:scale-[0.985] ${
+                      selectedErrorType === e.id
+                        ? "border-primary bg-primary/5"
+                        : "bg-card hover:border-primary/50 hover:bg-muted/40"
+                    }`}
+                  >
+                    <div className="font-semibold">{e.label}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">{e.detail}</div>
+                  </button>
+
+                  {selectedErrorType === "start-line" && e.id === "start-line" && (
+                    <div className="mt-2 px-1">
+                      <p className="text-xs text-muted-foreground mb-2 font-medium">Which direction?</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {(["left", "straight", "right"] as const).map(dir => (
+                          <button
+                            key={dir}
+                            onClick={() => logError("start-line", dir)}
+                            className="rounded-xl border bg-card py-2.5 text-sm font-medium hover:bg-primary/5 hover:border-primary transition active:scale-[0.985]"
+                          >
+                            {dir === "left" ? "← Left" : dir === "right" ? "Right →" : "Straight"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
 
             <button
-              onClick={() => { setPendingMiss(null); setPhase("playing"); }}
+              onClick={() => { setPendingMiss(null); setSelectedErrorType(null); setPhase("playing"); }}
               className="mt-5 text-xs text-muted-foreground hover:text-foreground underline underline-offset-4 block mx-auto"
             >
               ← I tapped Missed by mistake
@@ -527,6 +558,11 @@ export default function Arena3Hole() {
                             {r.errorType && (
                               <div className="text-xs text-rose-600 dark:text-rose-400 mt-0.5">
                                 {ERROR_TYPES.find(e => e.id === r.errorType)?.label}
+                                {r.actualDirection && r.actualDirection !== "straight" && (
+                                  <span className="ml-1 text-rose-500/80">
+                                    ({r.actualDirection === "left" ? "← left" : "right →"})
+                                  </span>
+                                )}
                               </div>
                             )}
                           </div>
