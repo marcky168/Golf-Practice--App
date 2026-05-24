@@ -10,6 +10,7 @@ import {
   type BagEntry,
 } from "./bag";
 import { shotForChipping, drillWithinChippingRange } from "./chipping";
+import { generateChippingScenarios } from "./chipping-scenarios";
 import { buildPerRepIntentions, blockUsesRandomMode } from "./intentions";
 import { shotForSwingLength } from "./partial-shots";
 import { attachWarmupToSession } from "./generators";
@@ -137,6 +138,30 @@ export function createBuilderSessionConfig(params: {
 
   const bag = params.userBag ?? [];
   if (bag.length === 0) return null;
+
+  // Chipping is scenario-based: each rep presents a lie/distance/green problem.
+  // The player chooses their own club during the session — no club selection needed here.
+  if (focus === "chipping") {
+    const totalShots = ballsPerBlock * numBlocks;
+    const drills = generateChippingScenarios(totalShots);
+    return attachWarmupToSession(
+      {
+        type: "block",
+        title: `Chipping Scenarios · ${numBlocks}×${ballsPerBlock}`,
+        durationMinutes: 0,
+        focusAreas: getCategoriesForFocus(focus),
+        drills,
+        focusCue,
+        builderFocus: focus,
+        clubs: [],
+        ballsPerBlock,
+        numBlocks,
+        cadenceSeconds,
+        practiceMode,
+      },
+      { userBag: bag }
+    );
+  }
 
   const selectedClubs = resolveClubsForBuilderFocus(params.clubs, focus, bag);
   if (selectedClubs.length === 0) return null;

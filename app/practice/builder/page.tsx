@@ -81,7 +81,7 @@ export default function PracticeBuilderPage() {
   const [sessionConfig, setSessionConfig] = useState<SessionConfig | null>(null);
   const [resumeData, setResumeData] = useState<PartialSession | null>(null);
 
-  const skipIntentionCustom = focus === "putting" || focus === "bunker";
+  const skipIntentionCustom = focus === "putting" || focus === "bunker" || focus === "chipping";
   const skipIntentionLibrary = selectedPreset
     ? !presetNeedsIntention(selectedPreset.focus) || selectedPreset.practiceMode === "random"
     : true;
@@ -99,8 +99,7 @@ export default function PracticeBuilderPage() {
     isChecklistComplete &&
     isIntentionSet &&
     userBag.length > 0 &&
-    clubs.length > 0 &&
-    selectedClubs.length > 0;
+    (focus === "chipping" || (clubs.length > 0 && selectedClubs.length > 0));
 
   const canStartLibrary =
     isChecklistComplete &&
@@ -189,7 +188,7 @@ export default function PracticeBuilderPage() {
       toast.error("Add clubs on your Profile first.");
       return;
     }
-    if (selectedClubs.length === 0) {
+    if (focus !== "chipping" && selectedClubs.length === 0) {
       toast.error("Select at least one club from your profile bag.");
       return;
     }
@@ -387,58 +386,67 @@ export default function PracticeBuilderPage() {
             </div>
           </div>
 
-          <div>
-            <Label className="mb-1 block text-base">Clubs (from your bag)</Label>
-            <p className="text-xs text-muted-foreground mb-3">
-              Tap to select one or more. Block mode rotates clubs per block; random mode mixes every rep.
-            </p>
-            {userBag.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Add clubs on your{" "}
-                <Link href="/profile" className="underline text-primary">Profile</Link>{" "}
-                first.
+          {focus === "chipping" ? (
+            <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-4 text-sm space-y-2">
+              <div className="font-semibold text-primary">Scenario-based chipping</div>
+              <p className="text-muted-foreground leading-relaxed">
+                Each shot presents a <strong>lie condition</strong>, <strong>distance</strong>, and{" "}
+                <strong>green to work with</strong>. You choose the club and shot type yourself —
+                exactly how it works on the course.
               </p>
-            ) : clubs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No bag clubs match this focus — try another focus or update your{" "}
-                <Link href="/profile" className="underline text-primary">Profile</Link>.
+              <p className="text-xs text-muted-foreground">
+                Examples: "Tight lie · firm turf · 16 yd · 5 ft of green before the hole" or
+                "Fluffy rough · ball up · 22 yd · plenty of green to use".
               </p>
-            ) : (
-            <div className="flex flex-wrap gap-2">
-              {clubs.map(c => {
-                const carry = userBag.find(e => e.club === c)?.carry;
-                const selected = selectedClubs.includes(c);
-                return (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => toggleClub(c)}
-                    className={`px-4 py-2 rounded-lg border text-sm font-medium transition active:scale-[0.985] ${
-                      selected ? "bg-primary text-primary-foreground border-primary" : "bg-card"
-                    }`}
-                  >
-                    {c}
-                    {carry != null && carry > 0 && (
-                      <span className={`ml-1 text-xs ${selected ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
-                        {carry}y
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
             </div>
-            )}
-            {selectedClubs.length > 1 && (
-              <p className="text-xs text-muted-foreground mt-2">
-                Selected: {selectedClubs.join(", ")}
+          ) : (
+            <div>
+              <Label className="mb-1 block text-base">Clubs (from your bag)</Label>
+              <p className="text-xs text-muted-foreground mb-3">
+                Tap to select one or more. Block mode rotates clubs per block; random mode mixes every rep.
               </p>
-            )}
-          </div>
-
-          {focus === "chipping" && (
-            <p className="text-sm text-muted-foreground -mt-4 mb-2 rounded-xl border bg-muted/40 px-4 py-3">
-              Every chip is <strong>{CHIPPING_MAX_YARDS} yards or less</strong>. Wedges, 9-iron, and hybrids from your bag are available — distances are chip-length, not full carry.
-            </p>
+              {userBag.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Add clubs on your{" "}
+                  <Link href="/profile" className="underline text-primary">Profile</Link>{" "}
+                  first.
+                </p>
+              ) : clubs.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No bag clubs match this focus — try another focus or update your{" "}
+                  <Link href="/profile" className="underline text-primary">Profile</Link>.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {clubs.map(c => {
+                    const carry = userBag.find(e => e.club === c)?.carry;
+                    const selected = selectedClubs.includes(c);
+                    return (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => toggleClub(c)}
+                        className={`px-4 py-2 rounded-lg border text-sm font-medium transition active:scale-[0.985] ${
+                          selected ? "bg-primary text-primary-foreground border-primary" : "bg-card"
+                        }`}
+                      >
+                        {c}
+                        {carry != null && carry > 0 && (
+                          <span className={`ml-1 text-xs ${selected ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
+                            {carry}y
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {selectedClubs.length > 1 && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  Selected: {selectedClubs.join(", ")}
+                </p>
+              )}
+            </div>
           )}
 
           {focus === "pitching" && (
