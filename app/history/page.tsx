@@ -59,7 +59,7 @@ export default async function HistoryPage() {
 
           <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
             <Link href="/practice/block">
-              <Button size="lg" variant="default">Try Block Practice first</Button>
+              <Button size="lg" variant="default">Try Quick Block</Button>
             </Link>
             <Link href="/practice">
               <Button size="lg" variant="outline">Browse all modes</Button>

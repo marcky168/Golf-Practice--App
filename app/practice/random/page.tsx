@@ -8,11 +8,12 @@ import { Label } from "@/components/ui/label";
 import { ArrowLeft, Shuffle, Play, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { generateRandomSessionWithWarmup } from "@/lib/practice/generators";
+import { generateRandomSessionWithWarmup, randomSessionWillIncludeWarmup } from "@/lib/practice/generators";
 import { SKILL_CATEGORIES, getYardagePresetsForAreas } from "@/lib/practice/constants";
-import type { SessionConfig, SkillCategory } from "@/lib/practice/types";
+import type { BunkerPracticeType, SessionConfig, SkillCategory } from "@/lib/practice/types";
 import { SessionRunner } from "@/components/practice/SessionRunner";
 import { SessionRunnerErrorBoundary } from "@/components/practice/SessionRunnerErrorBoundary";
+import { BunkerTypePicker } from "@/components/practice/BunkerTypePicker";
 import { SHAPES, TRAJECTORIES, type ShapeType, type TrajectoryType } from "@/components/practice/IntentionPicker";
 import { ResumePrompt, clearPartialSession, type PartialSession } from "@/components/practice/ResumePrompt";
 import { savePracticeSession, getClubBag } from "@/app/actions";
@@ -41,6 +42,7 @@ export default function RandomPracticePage() {
   const [numShots, setNumShots] = useState<number>(60);
   const [useDuration, setUseDuration] = useState<boolean>(true);
   const [selectedAreas, setSelectedAreas] = useState<SkillCategory[]>([]);
+  const [bunkerType, setBunkerType] = useState<BunkerPracticeType>("greenside");
 
   // Yardage range filter (optional)
   const [minYards, setMinYards] = useState<number>(0);
@@ -69,6 +71,10 @@ export default function RandomPracticePage() {
     }
   }
 
+  const includesWarmup = randomSessionWillIncludeWarmup({
+    focusAreas: selectedAreas.length > 0 ? selectedAreas : undefined,
+  });
+
   function generateAndStart() {
     unlockPracticeAudio();
     const config = generateRandomSessionWithWarmup({
@@ -78,6 +84,7 @@ export default function RandomPracticePage() {
       userBag: userBag.length > 0 ? userBag : undefined,
       minDistance: useYardageFilter ? minYards : undefined,
       maxDistance: useYardageFilter ? maxYards : undefined,
+      bunkerType: selectedAreas.includes("bunker") ? bunkerType : undefined,
     });
 
     setGeneratedConfig({ ...config, ...neuroFlagsFromState(microPauseMode, slowBurn) });
@@ -86,8 +93,8 @@ export default function RandomPracticePage() {
     const warm = config.warmupShotCount ?? 0;
     toast.success(
       warm > 0
-        ? `${warm} warm-up shots (short clubs), then ${config.drills.length - warm} practice shots`
-        : `Random session generated — ${config.drills.length} varied shots`
+        ? `Phase 1: ${warm} warm-up shots (short wedges). Phase 2: ${config.drills.length - warm} practice shots.`
+        : `Session ready — ${config.drills.length} practice shots`
     );
   }
 
@@ -142,10 +149,10 @@ export default function RandomPracticePage() {
 
         <div className="flex items-center gap-3 mb-2">
           <Shuffle className="h-8 w-8 text-accent" />
-          <h1 className="text-3xl font-semibold tracking-tighter">Random Practice</h1>
+          <h1 className="text-3xl font-semibold tracking-tighter">Random / Transfer</h1>
         </div>
         <p className="text-muted-foreground mb-8">
-          Interleaved, game-like drills. Best for transferring skills to the course.
+          Interleaved, course-like practice across your bag — warm-up, then mixed shots. Different from Session Builder &ldquo;Shuffle,&rdquo; which stays within one structured session.
         </p>
 
         <div className="space-y-8">
@@ -234,6 +241,10 @@ export default function RandomPracticePage() {
             </p>
           </div>
 
+          {selectedAreas.includes("bunker") && (
+            <BunkerTypePicker value={bunkerType} onChange={setBunkerType} />
+          )}
+
           {/* Yardage Range (contextual to selected focus areas) */}
           <div>
             <Label className="mb-2 block text-base">Distance / Range</Label>
@@ -298,6 +309,26 @@ export default function RandomPracticePage() {
             )}
           </div>
 
+          {includesWarmup ? (
+            <div className="rounded-xl border border-amber-200/70 bg-amber-50/60 dark:bg-amber-950/25 dark:border-amber-800/50 px-4 py-3 -mt-4 space-y-1">
+              <div className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                Two phases — warm-up, then practice
+              </div>
+              <p className="text-sm text-amber-900/80 dark:text-amber-200/80 leading-relaxed">
+                <span className="font-medium">Phase 1 (amber):</span> ~10 short wedge/chip shots to
+                loosen up — easy tempo, not your main focus.
+                <span className="block mt-1">
+                  <span className="font-medium">Phase 2 (green):</span> random practice at your
+                  selected focus{useYardageFilter ? ` and ${minYards}–${maxYards} yd range` : ""}.
+                </span>
+              </p>
+            </div>
+          ) : selectedAreas.length > 0 ? (
+            <p className="text-sm text-muted-foreground rounded-xl border bg-muted/40 px-4 py-3 -mt-4">
+              Short-game sessions skip the wedge warm-up — every shot is practice.
+            </p>
+          ) : null}
+
           {/* Rest Between Reps */}
           <div>
             <div className="mb-1 font-medium">Rest Between Reps</div>
@@ -344,7 +375,7 @@ export default function RandomPracticePage() {
             onClick={generateAndStart}
             disabled={selectedAreas.length === 0}
           >
-            <Play className="mr-2 h-5 w-5" /> Generate &amp; Start Random Session
+            <Play className="mr-2 h-5 w-5" /> Generate &amp; Start Session
           </Button>
           {selectedAreas.length === 0 && (
             <p className="text-center text-sm text-muted-foreground -mt-2">
@@ -394,11 +425,11 @@ export default function RandomPracticePage() {
         <div className="mx-auto w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mb-6">
           <CheckCircle2 className="w-9 h-9 text-emerald-600" />
         </div>
-        <h1 className="text-4xl font-semibold tracking-tighter mb-3">Random Session Logged</h1>
+        <h1 className="text-4xl font-semibold tracking-tighter mb-3">Session Logged</h1>
         <p className="text-xl text-muted-foreground">This kind of practice transfers best to the course.</p>
 
         <div className="flex flex-col gap-3 mt-10">
-          <Button size="lg" onClick={resetFlow}>Generate Another Random Session</Button>
+          <Button size="lg" onClick={resetFlow}>Start Another Transfer Session</Button>
           <Link href="/"><Button variant="outline" size="lg" className="w-full">Back to Dashboard</Button></Link>
         </div>
       </div>

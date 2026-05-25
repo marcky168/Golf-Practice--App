@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -43,6 +43,14 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { filterClubsForBunkerScenario } from '@/lib/practice/bunker-scenarios';
+import { filterClubsForChippingScenario } from '@/lib/practice/chipping-scenarios';
+
+function scenarioHeading(category?: string): string {
+  if (category === 'bunker') return 'Bunker scenario';
+  if (category === 'short-game') return 'Short game scenario';
+  return 'Scenario';
+}
 
 type Intention = { shape: ShapeType; trajectory: TrajectoryType };
 
@@ -78,7 +86,7 @@ interface RepRecord {
   trajectory?: TrajectoryType;
   errorCorrection?: RepErrorCorrection;
   scenarioClub?: string;
-  scenarioOutcome?: "good" | "mishit" | "wrong-club";
+  scenarioOutcome?: "good" | "mishit" | "wrong-club" | "made" | "missed";
 }
 
 type Phase = 'running' | 'rest' | 'block-review' | 'reflection' | 'replay' | 'micro-pause';
@@ -151,8 +159,49 @@ export function SessionRunner({
     ? Math.round((repInBlock / ballsPerBlock) * 100)
     : Math.round((currentIndex / totalSteps) * 100);
   const currentDrill = config.drills[currentIndex];
+  const scenarioClubOptions = useMemo(() => {
+    if (!currentDrill?.scenarioBased) return userBagClubs;
+    if (currentDrill.category === 'bunker') {
+      return filterClubsForBunkerScenario(userBagClubs, config.bunkerType ?? 'greenside');
+    }
+    if (currentDrill.category === 'short-game') {
+      return filterClubsForChippingScenario(userBagClubs);
+    }
+    return userBagClubs;
+  }, [currentDrill, userBagClubs, config.bunkerType]);
   const progressPercent = Math.round((currentIndex / totalSteps) * 100);
   const isCountdown = config.durationMinutes > 0;
+  // Putting scenario branch — scenarioBased + putting category. Outcome is Made/Missed, not club-pick.
+  const isPuttingScenario = currentDrill?.scenarioBased === true && currentDrill?.category === 'putting';
+
+  // Live current-streak across the session for putting (resets on any miss).
+  const currentPuttingStreak = useMemo(() => {
+    let streak = 0;
+    for (const r of repRecords) {
+      if (r.drill?.category !== 'putting') continue;
+      if (r.scenarioOutcome === 'made') streak++;
+      else if (r.scenarioOutcome === 'missed') streak = 0;
+    }
+    return streak;
+  }, [repRecords]);
+
+  // Best streak so far at the CURRENT drill's distance (resets on miss).
+  const bestStreakAtCurrentDistance = useMemo(() => {
+    if (!isPuttingScenario || !currentDrill?.distance) return 0;
+    let best = 0;
+    let current = 0;
+    for (const r of repRecords) {
+      if (r.drill?.category !== 'putting') continue;
+      if (r.drill?.distance !== currentDrill.distance) continue;
+      if (r.scenarioOutcome === 'made') {
+        current++;
+        if (current > best) best = current;
+      } else if (r.scenarioOutcome === 'missed') {
+        current = 0;
+      }
+    }
+    return best;
+  }, [repRecords, currentDrill, isPuttingScenario]);
 
   // Session timer setup
   useEffect(() => {
@@ -336,7 +385,7 @@ export function SessionRunner({
 
   function completeCurrentRep(
     rating?: number,
-    scenarioOpts?: { scenarioClub?: string; scenarioOutcome?: "good" | "mishit" | "wrong-club" }
+    scenarioOpts?: { scenarioClub?: string; scenarioOutcome?: "good" | "mishit" | "wrong-club" | "made" | "missed" }
   ) {
     if (!intentionReady) return;
     if (ultradianExceeded) {
@@ -561,6 +610,33 @@ export function SessionRunner({
 
   // ── REFLECTION ──────────────────────────────────────────────────────────────
   if (phase === 'reflection') {
+    // Per-distance putting streak summary for putting sessions.
+    const puttingReps = repRecords.filter(r => r.drill?.category === 'putting');
+    const puttingSummary: Array<{ distance: string; attempts: number; makes: number; best: number }> = [];
+    if (puttingReps.length > 0) {
+      const byDistance: Record<string, { attempts: number; makes: number; best: number; current: number }> = {};
+      for (const r of puttingReps) {
+        const dist = r.drill?.distance;
+        if (!dist) continue;
+        const bucket = byDistance[dist] ?? { attempts: 0, makes: 0, best: 0, current: 0 };
+        if (r.scenarioOutcome === 'made') {
+          bucket.attempts++;
+          bucket.makes++;
+          bucket.current++;
+          if (bucket.current > bucket.best) bucket.best = bucket.current;
+        } else if (r.scenarioOutcome === 'missed') {
+          bucket.attempts++;
+          bucket.current = 0;
+        }
+        byDistance[dist] = bucket;
+      }
+      for (const [distance, b] of Object.entries(byDistance)) {
+        if (b.attempts > 0) puttingSummary.push({ distance, attempts: b.attempts, makes: b.makes, best: b.best });
+      }
+      // Sort by distance ascending (parse the number from "6 ft")
+      puttingSummary.sort((a, b) => parseInt(a.distance) - parseInt(b.distance));
+    }
+
     return (
       <div className='min-h-screen bg-background pb-20 max-w-xl mx-auto px-4 pt-8'>
         <div className='text-center mb-8'>
@@ -570,6 +646,30 @@ export function SessionRunner({
           <h1 className='text-3xl font-semibold tracking-tighter'>Session Complete</h1>
           <p className='text-muted-foreground mt-1'>Lock in the learning with a short reflection.</p>
         </div>
+
+        {puttingSummary.length > 0 && (
+          <div className='mb-6 rounded-2xl border border-amber-300/60 bg-amber-50/60 dark:bg-amber-950/25 dark:border-amber-700/50 px-5 py-4'>
+            <div className='text-xs font-bold tracking-widest text-amber-700 dark:text-amber-400 uppercase mb-3'>
+              Putting streaks this session
+            </div>
+            <div className='space-y-2'>
+              {puttingSummary.map(s => (
+                <div key={s.distance} className='flex items-center justify-between text-sm'>
+                  <div className='font-medium'>{s.distance}</div>
+                  <div className='flex items-center gap-3'>
+                    <span className='text-muted-foreground'>
+                      {s.makes}/{s.attempts} made
+                    </span>
+                    <span className='font-semibold text-amber-700 dark:text-amber-300 tabular-nums'>
+                      🔥 {s.best} in a row
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <ReflectionForm onSave={handleSaveReflection} saveLabel='Save + Start Neural Replay' />
       </div>
     );
@@ -713,11 +813,17 @@ export function SessionRunner({
                   <span className='bg-primary/10 text-primary rounded-full px-2.5 py-0.5 text-xs font-semibold'>{lastRep.scenarioClub}</span>
                   {lastRep.scenarioOutcome && (
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                      lastRep.scenarioOutcome === 'good' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' :
-                      lastRep.scenarioOutcome === 'mishit' ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300' :
-                      'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'
+                      lastRep.scenarioOutcome === 'good' || lastRep.scenarioOutcome === 'made'
+                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                      : lastRep.scenarioOutcome === 'mishit'
+                        ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+                      : 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'
                     }`}>
-                      {lastRep.scenarioOutcome === 'good' ? '✅ Good call' : lastRep.scenarioOutcome === 'mishit' ? '🔁 Mishit' : '💭 Wrong club'}
+                      {lastRep.scenarioOutcome === 'good' ? '✅ Good call'
+                        : lastRep.scenarioOutcome === 'made' ? '✅ Made it'
+                        : lastRep.scenarioOutcome === 'mishit' ? '🔁 Mishit'
+                        : lastRep.scenarioOutcome === 'missed' ? '❌ Missed'
+                        : '💭 Wrong club'}
                     </span>
                   )}
                 </div>
@@ -747,10 +853,22 @@ export function SessionRunner({
                 End warm-up → Start practice
               </Button>
             )}
+            {nextDrill && currentIndex + 1 === warmupShotCount && warmupShotCount > 0 && (
+              <div className='w-full max-w-sm mb-4 rounded-2xl border-2 border-primary/40 bg-primary/10 px-4 py-3 text-sm text-left'>
+                <div className='font-bold text-primary mb-0.5'>Warm-up complete</div>
+                <div className='text-muted-foreground'>
+                  Next shot starts <span className='font-medium text-foreground'>practice phase</span> — your selected clubs and distances.
+                </div>
+              </div>
+            )}
             {nextDrill && (
               <div className='bg-card border rounded-2xl px-6 py-4 mb-8 text-left w-full max-w-sm'>
                 <div className='text-xs text-muted-foreground tracking-widest mb-2'>
-                  {nextIsWarmup ? 'NEXT — WARM-UP' : nextDrill.scenarioBased ? 'NEXT — SCENARIO' : 'NEXT — PRACTICE'}
+                  {nextIsWarmup
+                    ? `NEXT — WARM-UP ${currentIndex + 2} of ${warmupShotCount}`
+                    : nextDrill.scenarioBased
+                      ? 'NEXT — PRACTICE SCENARIO'
+                      : `NEXT — PRACTICE ${currentIndex + 2 - warmupShotCount} of ${practiceShotCount}`}
                 </div>
                 {nextDrill.scenarioBased ? (
                   <>
@@ -841,11 +959,13 @@ export function SessionRunner({
               {warmupShotCount > 0 && (
                 <div
                   className={
-                    'text-[10px] font-bold tracking-[0.2em] uppercase mb-0.5 ' +
+                    'text-xs font-bold tracking-wide mb-0.5 ' +
                     (isInWarmup ? 'text-amber-700 dark:text-amber-400' : 'text-primary')
                   }
                 >
-                  {isInWarmup ? 'Warm-up' : 'Practice'}
+                  {isInWarmup
+                    ? `WARM-UP · shot ${warmupRepNumber} of ${warmupShotCount}`
+                    : `PRACTICE · shot ${practiceRepNumber} of ${practiceShotCount}`}
                 </div>
               )}
               <div className='font-medium text-sm truncate'>{config.title}</div>
@@ -884,21 +1004,27 @@ export function SessionRunner({
           {warmupShotCount > 0 && (
             <div
               className={
-                'w-full max-w-md mb-4 rounded-2xl border px-4 py-3 text-sm ' +
+                'w-full max-w-md mb-4 rounded-2xl border-2 px-4 py-3.5 text-sm ' +
                 (isInWarmup
-                  ? 'border-amber-300/60 bg-amber-50/80 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100'
-                  : 'border-primary/25 bg-primary/5 text-foreground')
+                  ? 'border-amber-400/70 bg-amber-50/90 text-amber-950 dark:bg-amber-950/40 dark:border-amber-600/60 dark:text-amber-50'
+                  : 'border-primary/35 bg-primary/8 text-foreground')
               }
             >
               {isInWarmup ? (
                 <>
-                  <span className='font-semibold'>Warm-up shot {warmupRepNumber} of {warmupShotCount}</span>
-                  <span className='text-amber-800/80 dark:text-amber-200/80'> — short clubs, easy tempo</span>
+                  <div className='font-bold text-base mb-0.5'>Warm-up phase</div>
+                  <div>
+                    Shot <span className='font-semibold'>{warmupRepNumber} of {warmupShotCount}</span>
+                    <span className='text-amber-900/75 dark:text-amber-100/75'> — short wedges, easy tempo. Not your main practice yet.</span>
+                  </div>
                 </>
               ) : (
                 <>
-                  <span className='font-semibold text-primary'>Practice shot {practiceRepNumber} of {practiceShotCount}</span>
-                  <span className='text-muted-foreground'> — random, course-like</span>
+                  <div className='font-bold text-base text-primary mb-0.5'>Practice phase</div>
+                  <div>
+                    Shot <span className='font-semibold'>{practiceRepNumber} of {practiceShotCount}</span>
+                    <span className='text-muted-foreground'> — random, course-like shots at your selected focus.</span>
+                  </div>
                 </>
               )}
             </div>
@@ -922,7 +1048,7 @@ export function SessionRunner({
             /* ── Scenario drill: lie/distance/green problem — player chooses shot ── */
             <div className='w-full max-w-md mb-8'>
               <div className='uppercase tracking-[2px] text-xs text-muted-foreground mb-2'>
-                Short game scenario
+                {scenarioHeading(currentDrill.category)}
               </div>
               <div className='text-2xl font-semibold tracking-tight mb-3'>
                 {currentDrill.name}
@@ -950,9 +1076,18 @@ export function SessionRunner({
           ) : (
             /* ── Standard drill: prescribed club and distance ── */
             <div className='w-full max-w-md mb-8'>
-              <div className='uppercase tracking-[2px] text-xs text-muted-foreground mb-2'>
-                {isInWarmup ? 'Warm-up shot' : 'Practice shot'}
-              </div>
+              {warmupShotCount > 0 && (
+                <div
+                  className={
+                    'inline-flex items-center rounded-full px-4 py-1.5 mb-3 text-xs font-bold tracking-[0.12em] uppercase ' +
+                    (isInWarmup
+                      ? 'bg-amber-200 text-amber-950 dark:bg-amber-800 dark:text-amber-50'
+                      : 'bg-primary/15 text-primary')
+                  }
+                >
+                  {isInWarmup ? 'Warm-up — loosen up' : 'Practice — transfer training'}
+                </div>
+              )}
               <div className='text-3xl font-semibold tracking-tighter mb-1'>
                 {currentDrill.club} — {currentDrill.distance}
               </div>
@@ -991,17 +1126,68 @@ export function SessionRunner({
             </div>
           )}
 
-          {currentDrill?.scenarioBased ? (
+          {isPuttingScenario ? (
+            /* ── Putting scenario: Made / Missed + live streak ─────────── */
+            <>
+              <div className='w-full max-w-md mb-5 grid grid-cols-2 gap-3'>
+                <div className='rounded-2xl border-2 border-amber-300 bg-amber-50/80 dark:bg-amber-950/30 dark:border-amber-700/60 px-4 py-3 text-center'>
+                  <div className='text-[10px] font-bold tracking-widest text-amber-700 dark:text-amber-400 uppercase mb-0.5'>
+                    Current streak
+                  </div>
+                  <div className='text-3xl font-semibold tabular-nums text-amber-900 dark:text-amber-100'>
+                    {currentPuttingStreak}
+                  </div>
+                  <div className='text-[10px] text-amber-800/70 dark:text-amber-200/70 mt-0.5'>
+                    {currentPuttingStreak === 0 ? 'Make one to start' : 'in a row'}
+                  </div>
+                </div>
+                <div className='rounded-2xl border-2 border-primary/30 bg-primary/5 px-4 py-3 text-center'>
+                  <div className='text-[10px] font-bold tracking-widest text-primary uppercase mb-0.5'>
+                    Best at {currentDrill?.distance}
+                  </div>
+                  <div className='text-3xl font-semibold tabular-nums text-primary'>
+                    {bestStreakAtCurrentDistance}
+                  </div>
+                  <div className='text-[10px] text-muted-foreground mt-0.5'>this session</div>
+                </div>
+              </div>
+
+              <div className='w-full max-w-sm mb-5'>
+                <div className='flex justify-between text-sm mb-2 font-medium'>
+                  <div>Putt {currentIndex + 1} of {totalSteps}</div>
+                  <div>{progressPercent}%</div>
+                </div>
+                <Progress value={progressPercent} className='h-3' />
+              </div>
+
+              <div className='w-full max-w-sm space-y-2.5'>
+                <div className='text-sm text-center text-muted-foreground mb-1'>
+                  Did it drop?
+                </div>
+                <button
+                  onClick={() => completeCurrentRep(5, { scenarioOutcome: 'made' })}
+                  className='w-full h-16 rounded-2xl border-2 border-emerald-500 bg-emerald-50/80 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-200 font-semibold text-lg active:scale-[0.985] transition'
+                >
+                  ✅ Made it
+                </button>
+                <button
+                  onClick={() => completeCurrentRep(1, { scenarioOutcome: 'missed' })}
+                  className='w-full h-16 rounded-2xl border-2 border-rose-300 bg-rose-50/60 dark:bg-rose-950/25 dark:border-rose-800/60 text-rose-900 dark:text-rose-200 font-semibold text-lg active:scale-[0.985] transition'
+                >
+                  ❌ Missed
+                </button>
+              </div>
+            </>
+          ) : currentDrill?.scenarioBased ? (
             /* ── Scenario drill: club picker + 3-way outcome ─────────── */
             <>
-              {/* Club picker */}
               <div className='w-full max-w-md mb-5'>
                 <div className='text-xs uppercase tracking-widest text-muted-foreground mb-2'>
                   Which club are you using?
                 </div>
-                {userBagClubs.length > 0 ? (
+                {scenarioClubOptions.length > 0 ? (
                   <div className='flex flex-wrap gap-2'>
-                    {userBagClubs.map(club => (
+                    {scenarioClubOptions.map(club => (
                       <button
                         key={club}
                         type='button'
@@ -1113,13 +1299,39 @@ export function SessionRunner({
                     </div>
                   </>
                 ) : warmupShotCount > 0 ? (
-                  <div className='flex justify-between text-sm mb-2 font-medium'>
-                    <div>
-                      {isInWarmup
-                        ? `Warm-up ${warmupRepNumber}/${warmupShotCount}`
-                        : `Practice ${practiceRepNumber}/${practiceShotCount}`}
+                  <div className='space-y-2 mb-2'>
+                    <div className='flex justify-between text-xs font-medium'>
+                      <span className={isInWarmup ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground'}>
+                        Warm-up {isInWarmup ? warmupRepNumber : warmupShotCount}/{warmupShotCount}
+                      </span>
+                      <span className={!isInWarmup ? 'text-primary' : 'text-muted-foreground'}>
+                        Practice {!isInWarmup ? practiceRepNumber : 0}/{practiceShotCount}
+                      </span>
                     </div>
-                    <div>{progressPercent}% session</div>
+                    <div className='flex h-3 rounded-full overflow-hidden bg-muted'>
+                      <div
+                        className={
+                          'h-full transition-all duration-500 ' +
+                          (isInWarmup ? 'bg-amber-500' : 'bg-amber-400/80')
+                        }
+                        style={{
+                          width: `${(warmupShotCount / totalSteps) * 100}%`,
+                          opacity: isInWarmup ? 1 : 0.55,
+                        }}
+                      />
+                      <div
+                        className='h-full bg-primary transition-all duration-500'
+                        style={{
+                          width: !isInWarmup
+                            ? `${((practiceRepNumber / practiceShotCount) * (practiceShotCount / totalSteps)) * 100}%`
+                            : '0%',
+                        }}
+                      />
+                    </div>
+                    <div className='flex justify-between text-xs text-muted-foreground'>
+                      <span>Session {currentIndex + 1}/{totalSteps}</span>
+                      <span>{progressPercent}%</span>
+                    </div>
                   </div>
                 ) : (
                   <div className='flex justify-between text-sm mb-2 font-medium'>
@@ -1127,7 +1339,7 @@ export function SessionRunner({
                     <div>{progressPercent}%</div>
                   </div>
                 )}
-                {!isMultiBlock && <Progress value={progressPercent} className='h-3' />}
+                {!isMultiBlock && warmupShotCount <= 0 && <Progress value={progressPercent} className='h-3' />}
               </div>
 
               {warmupShotCount > 0 && isInWarmup && (

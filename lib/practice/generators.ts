@@ -1,6 +1,8 @@
 import { ALL_DRILLS, getDrillsByCategory } from "./drills";
 import { Drill, SessionConfig, SkillCategory } from "./types";
 import { generateChippingScenario } from "./chipping-scenarios";
+import { generateBunkerScenario, generateBunkerScenarios, bunkerSessionTitle } from "./bunker-scenarios";
+import type { BunkerPracticeType } from "./types";
 import {
   type BagEntry,
   clubInBag,
@@ -8,6 +10,7 @@ import {
   poolForSkillAndBag,
   applyBagToDrill,
   drillFromBagEntry,
+  bagEntryMatchesSkill,
   isPutterClub,
   isWedgeClubName,
 } from "./bag";
@@ -105,6 +108,97 @@ const WARMUP_CATEGORIES = new Set<SkillCategory>(["wedges", "short-game"]);
 
 const DEFAULT_WARMUP_AREAS: SkillCategory[] = ["wedges", "short-game"];
 
+function drillInYardageRange(drill: Drill, minDist: number, maxDist: number): boolean {
+  const yards = parseDrillDistance(drill);
+  return yards >= minDist && yards <= maxDist;
+}
+
+/** Drop categories that can't produce shots inside the selected yardage window */
+function areasForYardageFilter(
+  areas: SkillCategory[],
+  minDist: number,
+  maxDist: number
+): SkillCategory[] {
+  return areas.filter(cat => {
+    if (cat === "putting") return minDist <= 15;
+    if (cat === "short-game") return minDist <= 55 && maxDist >= 15;
+    if (cat === "bunker") return minDist <= 175 && maxDist >= 8;
+    if (cat === "wedges") return minDist <= 110 && maxDist >= 35;
+    return true;
+  });
+}
+
+/** Warm-up is skipped only for short-game-only sessions (chipping/putting/bunker). */
+export function randomSessionWillIncludeWarmup(options: {
+  focusAreas?: SkillCategory[];
+}): boolean {
+  const areas = options.focusAreas?.length ? options.focusAreas : DEFAULT_WARMUP_AREAS;
+
+  const isShortGameOnly =
+    areas.length > 0 &&
+    areas.every(a => a === "short-game" || a === "putting" || a === "bunker");
+
+  return !isShortGameOnly;
+}
+
+function synthesizeRandomDrillFromBag(
+  category: SkillCategory,
+  bag: BagEntry[],
+  minDist: number,
+  maxDist: number
+): Drill | null {
+  const matching = bag.filter(e => {
+    if (e.carry <= 0) return category === "putting";
+    if (!bagEntryMatchesSkill(e, category)) return false;
+    return e.carry >= minDist && e.carry <= maxDist;
+  });
+  if (matching.length === 0) return null;
+  const entry = matching[Math.floor(Math.random() * matching.length)];
+  return applyBagToDrill(drillFromBagEntry(entry, category), bag);
+}
+
+function pickRandomPracticeDrill(params: {
+  category: SkillCategory;
+  allDrills: Drill[];
+  bag: BagEntry[];
+  minDist: number;
+  maxDist: number;
+  usedLast: string[];
+  filterByBag: (pool: Drill[]) => Drill[];
+}): Drill {
+  const { category, allDrills, bag, minDist, maxDist, usedLast, filterByBag } = params;
+
+  const inRange = (d: Drill) => drillInYardageRange(d, minDist, maxDist);
+
+  let pool = filterByBag(
+    allDrills
+      .filter(d => d.category === category)
+      .filter(d => !usedLast.includes(d.club + (d.target ?? "")))
+      .filter(inRange)
+  );
+
+  if (pool.length > 0) {
+    return withBagData(pool[Math.floor(Math.random() * pool.length)], bag);
+  }
+
+  const fromBag = synthesizeRandomDrillFromBag(category, bag, minDist, maxDist);
+  if (fromBag) return fromBag;
+
+  pool = filterByBag(
+    allDrills.filter(d => d.category === category && inRange(d))
+  );
+  if (pool.length > 0) {
+    return withBagData(pool[Math.floor(Math.random() * pool.length)], bag);
+  }
+
+  const anyInCategory = filterByBag(allDrills.filter(d => d.category === category));
+  if (anyInCategory.length > 0) {
+    return withBagData(anyInCategory[Math.floor(Math.random() * anyInCategory.length)], bag);
+  }
+
+  return withBagData(allDrills[0] ?? ALL_DRILLS[0], bag);
+}
+
 function isNumberedIronClub(club: string): boolean {
   const m = club.match(/(\d+)\s*-?\s*iron/i);
   if (!m) return /\biron\b/i.test(club) && !isWedgeClubName(club);
@@ -191,8 +285,9 @@ export function generateRandomWarmupDrills(options: {
   const count = options.count ?? 10;
   const bag = options.userBag ?? [];
   const bagClubs = bag.map(e => e.club);
-  const minDist = options.minDistance ?? 0;
-  const maxDist = Math.min(options.maxDistance ?? WARMUP_MAX_YARDS, WARMUP_MAX_YARDS);
+  // Warm-up is always short-club — never inherit the practice yardage filter.
+  const minDist = 0;
+  const maxDist = WARMUP_MAX_YARDS;
 
   const allDrills = buildAugmentedPool(bag);
 
@@ -281,6 +376,13 @@ export function attachWarmupToSession(
     (config.focusAreas.length > 0 && config.focusAreas.every(a => SHORT_GAME_AREAS.has(a)));
   if (isShortGameOnly) return config;
 
+  if (
+    (config.type === "random" || config.type === "mixed") &&
+    !randomSessionWillIncludeWarmup({ focusAreas: config.focusAreas })
+  ) {
+    return config;
+  }
+
   const areas = config.focusAreas?.length ? config.focusAreas : DEFAULT_WARMUP_AREAS;
   const warmup = generateRandomWarmupDrills({
     count: options.warmupShots ?? 10,
@@ -315,25 +417,32 @@ export function generateRandomSessionWithWarmup(
     ? options.focusAreas
     : (["mid-irons", "wedges", "short-game", "putting"] as SkillCategory[]);
   const warmupCount = options.warmupShots ?? 10;
+  const includesWarmup = randomSessionWillIncludeWarmup({ focusAreas: areas });
 
   const practice = generateRandomSession({
     ...options,
     focusAreas: areas,
     durationMinutes:
       options.durationMinutes != null
-        ? Math.max(25, options.durationMinutes - 12)
+        ? includesWarmup
+          ? Math.max(25, options.durationMinutes - 12)
+          : options.durationMinutes
         : undefined,
     numShots:
-      options.numShots != null ? Math.max(25, options.numShots - warmupCount) : undefined,
+      options.numShots != null
+        ? includesWarmup
+          ? Math.max(25, options.numShots - warmupCount)
+          : options.numShots
+        : undefined,
   });
 
   const areaLabel =
     areas.length > 2 ? "Full-Bag" : areas.map(a => a.replace("-", " ")).join(" + ");
 
-  return attachWarmupToSession(
+  const attached = attachWarmupToSession(
     {
       ...practice,
-      title: `Random ${areaLabel} · Warm-up + Practice`,
+      title: practice.title,
       drills: practice.drills.map(d => ({ ...d, sessionPhase: "practice" as const })),
       focusCue:
         "Commit to each random shot like on the course — varied club, distance, and shape.",
@@ -345,6 +454,14 @@ export function generateRandomSessionWithWarmup(
       maxDistance: options.maxDistance,
     }
   );
+
+  const hasWarmup = (attached.warmupShotCount ?? 0) > 0;
+  return {
+    ...attached,
+    title: hasWarmup
+      ? `Random ${areaLabel} · Warm-up + Practice`
+      : practice.title,
+  };
 }
 
 // ─── Random Session ───────────────────────────────────────────────────────────
@@ -355,6 +472,7 @@ export function generateRandomSession(options: {
   userBag?: BagEntry[];
   minDistance?: number;
   maxDistance?: number;
+  bunkerType?: BunkerPracticeType;
 }): SessionConfig {
   const duration  = options.durationMinutes ?? 45;
   const numShots  = options.numShots ?? Math.round(duration * 1.6);
@@ -365,17 +483,18 @@ export function generateRandomSession(options: {
   const bagClubs  = bag.map(e => e.club);
   const minDist   = options.minDistance ?? 0;
   const maxDist   = options.maxDistance ?? 9999;
+  const bunkerType = options.bunkerType ?? "greenside";
+  const yardageFilterActive = options.minDistance != null || options.maxDistance != null;
+  const practiceAreas = yardageFilterActive
+    ? areasForYardageFilter(areas, minDist, maxDist)
+    : areas;
+  const shotAreas = practiceAreas.length > 0 ? practiceAreas : areas;
 
   const allDrills = buildAugmentedPool(bag);
-
-  function byArea(pool: Drill[]): Drill[] {
-    return pool.filter(d => areas.includes(d.category));
-  }
 
   function filterByBag(pool: Drill[]): Drill[] {
     if (bagClubs.length === 0) return pool;
     const matched = pool.filter(d => clubInBag(d.club, bagClubs));
-    // If bag filtering leaves nothing, keep the area-filtered pool (don't reach outside focus areas)
     return matched.length > 0 ? matched : pool;
   }
 
@@ -383,38 +502,31 @@ export function generateRandomSession(options: {
   const usedLast: string[] = [];
 
   for (let i = 0; i < numShots; i++) {
-    const category = areas[Math.floor(Math.random() * areas.length)];
+    const category = shotAreas[Math.floor(Math.random() * shotAreas.length)];
 
-    // Short-game drills are scenario-based — player chooses their own club
-    // and shot type from a presented lie/distance/green problem.
     if (category === "short-game") {
       drills.push(generateChippingScenario(`random-chip-${i}-${Date.now()}`));
+      usedLast.push("chip");
+      if (usedLast.length > 2) usedLast.shift();
+      continue;
+    }
+    if (category === "bunker") {
+      drills.push(generateBunkerScenario(`random-bunker-${i}-${Date.now()}`, bunkerType));
+      usedLast.push("bunker");
+      if (usedLast.length > 2) usedLast.shift();
       continue;
     }
 
-    const catPool = allDrills
-      .filter(d => d.category === category)
-      .filter(d => !usedLast.includes(d.club + (d.target ?? "")))
-      .filter(d => {
-        const dYards = parseDrillDistance(d);
-        return dYards >= minDist && dYards <= maxDist;
-      });
-    const pool = filterByBag(catPool);
-
-    let chosen: Drill;
-    if (pool.length > 0) {
-      chosen = pool[Math.floor(Math.random() * pool.length)];
-    } else {
-      // Fallback: stay strictly within focus areas, apply bag filter
-      const areaFallback = filterByBag(
-        byArea(allDrills).filter(d => !usedLast.includes(d.club))
-      );
-      chosen = areaFallback.length > 0
-        ? areaFallback[Math.floor(Math.random() * areaFallback.length)]
-        : byArea(allDrills)[0] ?? ALL_DRILLS[0];
-    }
-
-    drills.push(withBagData(chosen, bag));
+    const chosen = pickRandomPracticeDrill({
+      category,
+      allDrills,
+      bag,
+      minDist,
+      maxDist,
+      usedLast,
+      filterByBag,
+    });
+    drills.push(chosen);
     usedLast.push(chosen.club + (chosen.target ?? ""));
     if (usedLast.length > 2) usedLast.shift();
   }
@@ -428,6 +540,7 @@ export function generateRandomSession(options: {
     focusAreas: areas,
     drills,
     focusCue: undefined,
+    bunkerType: areas.includes("bunker") ? bunkerType : undefined,
   };
 }
 
@@ -480,11 +593,29 @@ export function createBlockConfig(params: {
   minDistance?: number;
   maxDistance?: number;
   userBag?: BagEntry[];
+  bunkerType?: BunkerPracticeType;
 }): SessionConfig | null {
   const minDist = params.minDistance ?? 0;
   const maxDist = params.maxDistance ?? 9999;
   const bag = params.userBag ?? [];
   if (bag.length === 0) return null;
+
+  if (params.skill === "bunker") {
+    const bunkerType = params.bunkerType ?? "greenside";
+    const drills = generateBunkerScenarios(params.reps, bunkerType);
+    return attachWarmupToSession(
+      {
+        type: "block",
+        title: bunkerSessionTitle(bunkerType, `${params.reps} shots`),
+        durationMinutes: 0,
+        focusAreas: ["bunker"],
+        drills,
+        focusCue: params.focusCue,
+        bunkerType,
+      },
+      { userBag: bag, minDistance: params.minDistance, maxDistance: params.maxDistance }
+    );
+  }
 
   let pool = poolForSkillAndBag(params.skill, bag);
 

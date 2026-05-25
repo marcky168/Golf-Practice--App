@@ -51,7 +51,7 @@ export function PracticeTrends({ sessions }: { sessions: SessionRow[] }) {
   if (!hasFocus && !hasWeekly) {
     return (
       <p className="text-sm text-muted-foreground text-center py-6">
-        Complete a Practice Builder or block session with ratings to see trends here.
+        Complete a Session Builder or Quick Block session with ratings to see trends here.
       </p>
     );
   }

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { getUserSessions, getClubBag, saveClubBag, signOut, type ClubEntry } from "@/app/actions";
 import { getLoggedPracticeMinutes } from "@/lib/practice/session-duration";
-import { practiceModeLabel } from "@/lib/practice/session-type-label";
+import { practiceFocusLabel } from "@/lib/practice/session-type-label";
 import {
   User, LogOut, Target, Trophy, Clock, TrendingUp,
   Save, Plus, Trash2, Loader2, Check, Pencil, ChevronUp,
@@ -57,7 +57,7 @@ export default function ProfilePage() {
 
   // User & stats
   const [email, setEmail] = useState<string | null>(null);
-  const [stats, setStats] = useState<{ total: number; streak: number; hours: number; mostCommon: string } | null>(null);
+  const [stats, setStats] = useState<{ total: number; streak: number; hours: number; topFocus: string } | null>(null);
   const [loadingStats, setLoadingStats] = useState(true);
 
   // Club bag
@@ -76,17 +76,17 @@ export default function ProfilePage() {
         setEmail(user.email ?? null);
         const sessions = await getUserSessions(100);
         const practiceSessions = sessions.filter(s => s.type !== "planned");
-        const typeCounts: Record<string, number> = {};
+        const focusCounts: Record<string, number> = {};
         practiceSessions.forEach(s => {
-          const label = practiceModeLabel(s);
-          typeCounts[label] = (typeCounts[label] ?? 0) + 1;
+          const label = practiceFocusLabel(s);
+          focusCounts[label] = (focusCounts[label] ?? 0) + 1;
         });
-        const mostCommon = Object.keys(typeCounts).sort((a, b) => typeCounts[b] - typeCounts[a])[0] || "—";
+        const topFocus = Object.keys(focusCounts).sort((a, b) => focusCounts[b] - focusCounts[a])[0] || "—";
         setStats({
           total:      practiceSessions.length,
           streak:     calculateStreak(practiceSessions),
           hours:      Math.round((getLoggedPracticeMinutes(practiceSessions) / 60) * 10) / 10,
-          mostCommon,
+          topFocus,
         });
       }
       setLoadingStats(false);
@@ -225,8 +225,8 @@ export default function ProfilePage() {
                 <TrendingUp className="h-4 w-4 text-accent" />
               </div>
               <div>
-                <div className="text-lg font-semibold">{stats.mostCommon}</div>
-                <div className="text-xs text-muted-foreground">Most Common</div>
+                <div className="text-lg font-semibold leading-snug">{stats.topFocus}</div>
+                <div className="text-xs text-muted-foreground">Top Focus</div>
               </div>
             </div>
           </div>

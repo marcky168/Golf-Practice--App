@@ -41,10 +41,10 @@ export function WelcomeHint() {
 
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li>
-                <strong className="text-foreground">Block Practice</strong> — Best when making a technical change or grooving feel.
+                <strong className="text-foreground">Quick Block</strong> — Best when grooving one club or skill.
               </li>
               <li>
-                <strong className="text-foreground">Random Practice</strong> — Use this for most sessions. It’s the most effective for on-course performance.
+                <strong className="text-foreground">Random / Transfer</strong> — Use for most sessions. Best on-course transfer.
               </li>
               <li>
                 <strong className="text-foreground">Games</strong> — Excellent for pressure training and decision-making under stress.

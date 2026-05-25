@@ -9,13 +9,24 @@ import { Label } from "@/components/ui/label";
 import { ArrowLeft, Target, Play, CheckCircle2, Wrench, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 
-import { createBlockConfig } from "@/lib/practice/generators";
+import { createBlockConfig, generateRandomSession } from "@/lib/practice/generators";
 import { getClubsInBagForSkill } from "@/lib/practice/bag";
 import { SKILL_CATEGORIES, getFocusCuesForSkill, getYardagePresetsForSkill, DELIBERATE_CHECKLIST } from "@/lib/practice/constants";
-import { getClubBag, type ClubEntry } from "@/app/actions";
-import type { SessionConfig, SkillCategory } from "@/lib/practice/types";
+import { getClubBag, getPuttingStreaksByDistance, type ClubEntry } from "@/app/actions";
+import type { BunkerPracticeType, SessionConfig, SkillCategory } from "@/lib/practice/types";
 import { SessionRunner } from "@/components/practice/SessionRunner";
 import { SessionRunnerErrorBoundary } from "@/components/practice/SessionRunnerErrorBoundary";
+import { BunkerTypePicker } from "@/components/practice/BunkerTypePicker";
+import { filterClubsForBunkerScenario } from "@/lib/practice/bunker-scenarios";
+import {
+  PUTTING_DISTANCES,
+  PUTTING_BREAKS,
+  generateBlockPuttingScenarios,
+  generateRandomPuttingScenarios,
+  puttingSessionTitle,
+  type PuttingDistanceValue,
+  type PuttingBreakValue,
+} from "@/lib/practice/putting-scenarios";
 import { IntentionPicker, type ShapeType, type TrajectoryType } from "@/components/practice/IntentionPicker";
 import { ResumePrompt, clearPartialSession, type PartialSession } from "@/components/practice/ResumePrompt";
 import { savePracticeSession } from "@/app/actions";
@@ -33,15 +44,39 @@ import {
 type FlowStep = "wizard" | "pre-session" | "running" | "complete";
 type EntryMode = "custom" | "library";
 
-export default function BlockPracticePage() {
+export default function QuickBlockPage() {
   const [step, setStep] = useState<FlowStep>("wizard");
   const [entryMode, setEntryMode] = useState<EntryMode>("custom");
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
 
   const selectedPreset = BLOCK_DRILL_LIBRARY.find(d => d.id === selectedPresetId) ?? null;
 
+  const [skillLockedFromUrl, setSkillLockedFromUrl] = useState(false);
+
   // Wizard state
   const [selectedSkill, setSelectedSkill] = useState<SkillCategory>("mid-irons");
+  // Block vs Random — only meaningful for skills with built-in variety (irons family, wedges, putting).
+  const [skillPracticeMode, setSkillPracticeMode] = useState<"block" | "random">("block");
+  // Putting-only: which distance + break to groove during block mode.
+  const [puttingDistance, setPuttingDistance] = useState<PuttingDistanceValue>(10);
+  const [puttingBreak, setPuttingBreak] = useState<PuttingBreakValue>("straight");
+  // Best make-streak the user has ever recorded at each distance ("6 ft" → 8).
+  const [puttingBests, setPuttingBests] = useState<Record<string, number>>({});
+
+  // Read ?skill= and ?mode= from URL on mount and apply to state.
+  // useEffect (not useMemo at render time) — SSR strips window, and a useState
+  // initial value computed during SSR sticks unless we overwrite it on the client.
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const rawSkill = params.get("skill");
+    const valid = new Set(SKILL_CATEGORIES.map(c => c.value));
+    if (rawSkill && valid.has(rawSkill as SkillCategory)) {
+      setSelectedSkill(rawSkill as SkillCategory);
+      setSkillLockedFromUrl(true);
+    }
+    if (params.get("mode") === "library") setEntryMode("library");
+  }, []);
+  const [bunkerType, setBunkerType] = useState<BunkerPracticeType>("greenside");
 
   // Reset focus cue when skill changes (different skills have different cue lists)
   React.useEffect(() => {
@@ -83,6 +118,7 @@ export default function BlockPracticePage() {
       setUserBag(bag);
       setBagLoading(false);
     });
+    getPuttingStreaksByDistance().then(setPuttingBests);
   }, []);
 
   React.useEffect(() => {
@@ -93,19 +129,42 @@ export default function BlockPracticePage() {
   }, [selectedSkill, userBag]);
 
   const isChecklistComplete = checklist.every(Boolean);
-  const skipIntentionCustom = selectedSkill === "putting" || selectedSkill === "bunker";
+  // Skills with built-in variety — Block (groove one) vs Random (mix it up).
+  const RANDOMIZABLE_CLUB_SKILLS: SkillCategory[] = ["mid-irons", "long-irons", "short-irons", "wedges"];
+  const isPuttingScenario = selectedSkill === "putting";
+  // Putting: random varies distance+break with the same putter (no club-count gate).
+  // Irons/Wedges: random mixes multiple clubs (needs 2+).
+  const supportsRandomMode = isPuttingScenario
+    ? true
+    : RANDOMIZABLE_CLUB_SKILLS.includes(selectedSkill) && clubsForSkill.length >= 2;
+  const isRandomWithinSkill = supportsRandomMode && skillPracticeMode === "random";
+  const skipIntentionCustom = selectedSkill === "putting" || selectedSkill === "bunker" || isRandomWithinSkill;
+  const isScenarioBunker = selectedSkill === "bunker";
   const skipIntentionLibrary = selectedPreset ? !presetNeedsIntention(selectedPreset.focus) : true;
   const skipIntention = entryMode === "custom" ? skipIntentionCustom : skipIntentionLibrary;
   const isIntentionSet = skipIntention || (sessionShape !== null && sessionTrajectory !== null);
   const effectiveCue = customCue.trim() || focusCue;
+
+  // Auto-revert to block mode if user switches to a skill where random doesn't apply.
+  React.useEffect(() => {
+    if (!supportsRandomMode && skillPracticeMode === "random") setSkillPracticeMode("block");
+  }, [supportsRandomMode, skillPracticeMode]);
+
+  const bunkerBagReady =
+    !isScenarioBunker ||
+    filterClubsForBunkerScenario(userBag.map(e => e.club), bunkerType).length > 0;
 
   const canStartCustom =
     isChecklistComplete &&
     isIntentionSet &&
     !bagLoading &&
     userBag.length > 0 &&
-    clubsForSkill.length > 0 &&
-    !!selectedClub;
+    bunkerBagReady &&
+    (isScenarioBunker
+      ? true
+      : isRandomWithinSkill
+        ? clubsForSkill.length > 0
+        : clubsForSkill.length > 0 && !!selectedClub);
 
   const canStartLibrary =
     isChecklistComplete &&
@@ -124,21 +183,66 @@ export default function BlockPracticePage() {
   function startBlockSession() {
     unlockPracticeAudio();
     if (!isChecklistComplete || !isIntentionSet) return;
-    if (!selectedClub) {
+    if (!isScenarioBunker && (!isRandomWithinSkill || isPuttingScenario) && !selectedClub) {
       toast.error("Select a club from your profile bag.");
       return;
     }
 
-    const config = createBlockConfig({
-      skill: selectedSkill,
-      reps,
-      club: selectedClub,
-      target: target.trim() || undefined,
-      focusCue: effectiveCue,
-      minDistance: useYardageFilter ? minYards : undefined,
-      maxDistance: useYardageFilter ? maxYards : undefined,
-      userBag,
-    });
+    let config: SessionConfig | null;
+    if (isPuttingScenario) {
+      // Putting scenarios: distance + break, either fixed (block) or varied (random).
+      const drills =
+        skillPracticeMode === "random"
+          ? generateRandomPuttingScenarios({ count: reps, putter: selectedClub })
+          : generateBlockPuttingScenarios({
+              count: reps,
+              putter: selectedClub,
+              distance: puttingDistance,
+              break_: puttingBreak,
+            });
+      config = {
+        type: "block",
+        title: puttingSessionTitle({
+          mode: skillPracticeMode,
+          count: reps,
+          distance: skillPracticeMode === "block" ? puttingDistance : undefined,
+          break_: skillPracticeMode === "block" ? puttingBreak : undefined,
+        }),
+        durationMinutes: 0,
+        focusAreas: ["putting"],
+        drills,
+        focusCue: effectiveCue,
+        club: selectedClub,
+      };
+    } else if (isRandomWithinSkill) {
+      // Random mix across all clubs in this skill — no warm-up (it's a focused mini-session).
+      const skillLabel = SKILL_CATEGORIES.find(c => c.value === selectedSkill)?.label ?? selectedSkill;
+      const generated = generateRandomSession({
+        numShots: reps,
+        focusAreas: [selectedSkill],
+        userBag: userBag.map(e => ({ club: e.club, carry: e.carry })),
+        minDistance: useYardageFilter ? minYards : undefined,
+        maxDistance: useYardageFilter ? maxYards : undefined,
+      });
+      config = {
+        ...generated,
+        type: "block",
+        title: `Random ${skillLabel} · ${reps} shots`,
+        focusCue: effectiveCue,
+      };
+    } else {
+      config = createBlockConfig({
+        skill: selectedSkill,
+        reps,
+        club: selectedClub,
+        target: target.trim() || undefined,
+        focusCue: effectiveCue,
+        minDistance: useYardageFilter ? minYards : undefined,
+        maxDistance: useYardageFilter ? maxYards : undefined,
+        userBag,
+        bunkerType: isScenarioBunker ? bunkerType : undefined,
+      });
+    }
 
     if (!config) {
       toast.error("No clubs in your bag match this skill. Update your profile.");
@@ -147,7 +251,17 @@ export default function BlockPracticePage() {
 
     setSessionConfig({ ...config, ...neuroFlagsFromState(microPauseMode, slowBurn) });
     setStep("pre-session");
-    toast.success(`Block session started — ${reps} reps`);
+    if (isPuttingScenario) {
+      toast.success(
+        skillPracticeMode === "random"
+          ? `Random putting started — ${reps} varied shots`
+          : `Block putting started — ${reps} reps`
+      );
+    } else if (isRandomWithinSkill) {
+      toast.success(`Random mix started — ${reps} shots`);
+    } else {
+      toast.success(`Block session started — ${reps} reps`);
+    }
   }
 
   function startLibrarySession() {
@@ -225,9 +339,12 @@ export default function BlockPracticePage() {
 
         <div className="flex items-center gap-3 mb-2">
           <Target className="h-8 w-8 text-primary" />
-          <h1 className="text-3xl font-semibold tracking-tighter">Block Practice</h1>
+          <h1 className="text-3xl font-semibold tracking-tighter">Quick Block</h1>
         </div>
-        <p className="text-muted-foreground mb-6">Deep, focused repetition — build your own or pick a drill.</p>
+        <p className="text-muted-foreground mb-6">
+          One skill, one club, repeat — fast setup. Need chipping scenarios or cadence blocks? Use{" "}
+          <Link href="/practice/builder" className="underline text-primary">Session Builder</Link>.
+        </p>
 
         <div className="grid grid-cols-2 gap-2 mb-8">
           <button
@@ -252,7 +369,7 @@ export default function BlockPracticePage() {
             }`}
           >
             <BookOpen className="h-5 w-5 text-primary" />
-            <span className="font-semibold text-sm">Drill library</span>
+            <span className="font-semibold text-sm">Start from template</span>
             <span className="text-xs text-muted-foreground">Pre-built block sessions</span>
           </button>
         </div>
@@ -278,29 +395,115 @@ export default function BlockPracticePage() {
 
           {entryMode === "custom" && (
           <>
-          {/* Skill Picker */}
-          <div>
-            <Label className="mb-3 block text-base">Skill / Club Category</Label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {SKILL_CATEGORIES.map((cat) => (
+          {/* Skill Picker — hidden when arriving via ?skill= (already chose from dashboard) */}
+          {skillLockedFromUrl ? (
+            <div className="flex items-center justify-between rounded-xl border border-primary/30 bg-primary/5 px-4 py-3">
+              <div>
+                <div className="text-[10px] font-bold tracking-widest text-primary uppercase mb-0.5">
+                  Practicing
+                </div>
+                <div className="font-semibold">
+                  {SKILL_CATEGORIES.find(c => c.value === selectedSkill)?.label ?? selectedSkill}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSkillLockedFromUrl(false)}
+                className="text-sm text-primary hover:underline"
+              >
+                Change
+              </button>
+            </div>
+          ) : (
+            <div>
+              <Label className="mb-3 block text-base">Skill / Club Category</Label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {SKILL_CATEGORIES.map((cat) => (
+                  <button
+                    key={cat.value}
+                    onClick={() => setSelectedSkill(cat.value)}
+                    className={`h-12 rounded-xl border text-sm font-medium transition active:scale-[0.985] ${
+                      selectedSkill === cat.value
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-card hover:bg-muted border-border"
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Block vs Random — only shown when the skill has built-in variety */}
+          {supportsRandomMode && (
+            <div>
+              <Label className="mb-2 block text-base">Practice style</Label>
+              <div className="grid grid-cols-2 gap-2">
                 <button
-                  key={cat.value}
-                  onClick={() => setSelectedSkill(cat.value)}
-                  className={`h-12 rounded-xl border text-sm font-medium transition active:scale-[0.985] ${
-                    selectedSkill === cat.value
-                      ? "bg-primary text-primary-foreground border-primary"
+                  type="button"
+                  onClick={() => setSkillPracticeMode("block")}
+                  className={`rounded-xl border p-3 text-left transition active:scale-[0.985] ${
+                    skillPracticeMode === "block"
+                      ? "border-primary bg-primary/5"
                       : "bg-card hover:bg-muted border-border"
                   }`}
                 >
-                  {cat.label}
+                  <div className="font-semibold text-sm">Block</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {isPuttingScenario ? "Same distance & break — groove it" : "Pick one club, repeat"}
+                  </div>
                 </button>
-              ))}
+                <button
+                  type="button"
+                  onClick={() => setSkillPracticeMode("random")}
+                  className={`rounded-xl border p-3 text-left transition active:scale-[0.985] ${
+                    skillPracticeMode === "random"
+                      ? "border-primary bg-primary/5"
+                      : "bg-card hover:bg-muted border-border"
+                  }`}
+                >
+                  <div className="font-semibold text-sm">Random</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {isPuttingScenario ? "Vary distance + break every shot" : "Mix all clubs in this skill"}
+                  </div>
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Club — profile bag only */}
+          {/* Club — profile bag only (scenario bunker skips preset club; random-within-skill shows the mix) */}
+          {isScenarioBunker ? (
+            <div className="space-y-4">
+              <BunkerTypePicker value={bunkerType} onChange={setBunkerType} />
+            <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-4 text-sm space-y-2">
+              <div className="font-semibold text-primary">Scenario-based bunker play</div>
+              <p className="text-muted-foreground leading-relaxed">
+                Each rep presents a <strong>bunker lie</strong>, <strong>distance</strong>, and{" "}
+                <strong>green to work with</strong>. You pick the club for that station — wedges for
+                greenside, irons or hybrids for fairway bunkers.
+              </p>
+            </div>
+            </div>
+          ) : isRandomWithinSkill && !isPuttingScenario ? (
+            <div className="rounded-xl border border-accent/40 bg-accent/5 px-4 py-3">
+              <Label className="block text-base mb-1">Clubs in the mix</Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Each shot picks one of these at random — same skill, varied club &amp; distance.
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {clubsForSkill.map(c => (
+                  <span key={c} className="px-2.5 py-1 rounded-full bg-accent/15 text-accent text-xs font-medium">
+                    {c}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : (
           <div>
-            <Label className="mb-2 block text-base">Club (from your bag)</Label>
+            <Label className="mb-2 block text-base">
+              {isPuttingScenario ? "Putter (from your bag)" : "Club (from your bag)"}
+            </Label>
             {bagLoading ? (
               <p className="text-sm text-muted-foreground">Loading your clubs…</p>
             ) : userBag.length === 0 ? (
@@ -333,9 +536,96 @@ export default function BlockPracticePage() {
               </div>
             )}
           </div>
+          )}
 
-          {/* Contextual Yardage / Range Picker (appears after skill is chosen) */}
-          {selectedSkill && (
+          {/* Putting-only — Distance + Break pickers (block mode only) */}
+          {isPuttingScenario && skillPracticeMode === "block" && (
+            <>
+              <div>
+                <Label className="mb-1 block text-base">Distance</Label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Same distance every rep — groove the speed.
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {PUTTING_DISTANCES.map(d => {
+                    const best = puttingBests[d.label] ?? 0;
+                    const isSelected = puttingDistance === d.value;
+                    return (
+                      <button
+                        key={d.value}
+                        type="button"
+                        onClick={() => setPuttingDistance(d.value)}
+                        className={`rounded-xl border p-3 text-left transition active:scale-[0.985] relative ${
+                          isSelected
+                            ? "border-primary bg-primary/5"
+                            : "bg-card hover:bg-muted border-border"
+                        }`}
+                      >
+                        <div className="font-semibold text-sm">{d.label}</div>
+                        <div className="text-[10px] text-muted-foreground leading-snug">{d.why}</div>
+                        {best > 0 && (
+                          <div className="text-[10px] font-semibold text-amber-700 dark:text-amber-400 mt-1">
+                            Best: {best} in a row
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                {(puttingBests[PUTTING_DISTANCES.find(d => d.value === puttingDistance)?.label ?? ""] ?? 0) > 0 ? (
+                  <div className="mt-3 rounded-xl border border-amber-300/60 bg-amber-50/70 dark:bg-amber-950/25 dark:border-amber-700/50 px-4 py-2.5 text-sm">
+                    <span className="font-semibold text-amber-800 dark:text-amber-200">
+                      Your best at {PUTTING_DISTANCES.find(d => d.value === puttingDistance)?.label}:{" "}
+                      {puttingBests[PUTTING_DISTANCES.find(d => d.value === puttingDistance)?.label ?? ""]} in a row
+                    </span>
+                    <span className="text-amber-700/80 dark:text-amber-300/80"> — try to beat it.</span>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    No streak recorded at this distance yet — set your first benchmark.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Label className="mb-1 block text-base">Break</Label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Practicing the read is the actual skill — not the stroke.
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {PUTTING_BREAKS.map(b => (
+                    <button
+                      key={b.value}
+                      type="button"
+                      onClick={() => setPuttingBreak(b.value)}
+                      className={`rounded-xl border p-3 text-left transition active:scale-[0.985] ${
+                        puttingBreak === b.value
+                          ? "border-primary bg-primary/5"
+                          : "bg-card hover:bg-muted border-border"
+                      }`}
+                    >
+                      <div className="font-semibold text-sm">{b.label}</div>
+                      <div className="text-[10px] text-muted-foreground leading-snug">{b.hint}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Putting-only — Random preview */}
+          {isPuttingScenario && skillPracticeMode === "random" && (
+            <div className="rounded-xl border border-accent/40 bg-accent/5 px-4 py-3">
+              <div className="font-semibold text-sm mb-1">Random putting</div>
+              <p className="text-xs text-muted-foreground leading-snug">
+                Each shot gets a different distance ({PUTTING_DISTANCES[0].label}–{PUTTING_DISTANCES[PUTTING_DISTANCES.length - 1].label})
+                and break (straight, slight/strong both ways, uphill, downhill, double). Avoids back-to-back duplicates.
+              </p>
+            </div>
+          )}
+
+          {/* Contextual Yardage / Range Picker (full-swing skills only — putting has its own distance picker above) */}
+          {selectedSkill && selectedSkill !== "bunker" && !isPuttingScenario && (
             <div>
               <Label className="mb-2 block text-base">Distance / Range</Label>
               <div className="flex flex-wrap gap-2">
@@ -583,6 +873,7 @@ export default function BlockPracticePage() {
           onExit={() => setStep("wizard")}
           restIntervalSeconds={restInterval}
           fixedIntention={sessionShape && sessionTrajectory ? { shape: sessionShape, trajectory: sessionTrajectory } : undefined}
+          userBagClubs={userBag.map(e => e.club)}
           initialRepRecords={resumeData?.repRecords}
           initialCurrentIndex={resumeData?.currentIndex}
           initialSessionStartedAt={resumeData?.sessionStartedAt}
@@ -602,7 +893,7 @@ export default function BlockPracticePage() {
         <p className="text-xl text-muted-foreground">Excellent deliberate work.</p>
 
         <div className="flex flex-col gap-3 mt-10">
-          <Button size="lg" onClick={resetFlow}>Start Another Block Session</Button>
+          <Button size="lg" onClick={resetFlow}>Start Another Quick Block</Button>
           <Link href="/"><Button variant="outline" size="lg" className="w-full">Back to Dashboard</Button></Link>
         </div>
       </div>

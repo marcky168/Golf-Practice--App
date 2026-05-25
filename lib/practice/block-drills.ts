@@ -1,7 +1,8 @@
 import { createBuilderSessionConfig } from "./builder";
 import { focusLabelForPreset, pickClubsForBlockDrillPreset } from "./block-drill-clubs";
+import { filterClubsForBunkerScenario } from "./bunker-scenarios";
 import type { BagEntry } from "./bag";
-import type { BuilderFocus, BuilderPracticeMode, SessionConfig, SwingLength } from "./types";
+import type { BuilderFocus, BuilderPracticeMode, BunkerPracticeType, SessionConfig, SwingLength } from "./types";
 
 export type DrillPresetAvailability = {
   available: boolean;
@@ -29,6 +30,9 @@ export interface BlockDrillPreset {
   practiceMode: BuilderPracticeMode;
   focusCue: string;
   target?: string;
+  bunkerType?: BunkerPracticeType;
+  chippingBlockLie?: string;
+  chippingBlockGreen?: string;
 }
 
 export const BLOCK_DRILL_LIBRARY: BlockDrillPreset[] = [
@@ -76,6 +80,8 @@ export const BLOCK_DRILL_LIBRARY: BlockDrillPreset[] = [
     whyItHelps: "Tight block focus on one landing zone builds reliable short-game contact before you add lie variability.",
     focus: "chipping",
     club: "PW",
+    chippingBlockLie: "Tight lie · firm turf",
+    chippingBlockGreen: "12 ft of green · flag centre",
     ballsPerBlock: 10,
     numBlocks: 3,
     cadenceSeconds: 30,
@@ -123,17 +129,32 @@ export const BLOCK_DRILL_LIBRARY: BlockDrillPreset[] = [
     target: "Dead center",
   },
   {
-    id: "bunker-explosion-24",
-    name: "24-Ball Bunker — Explosion",
-    whyItHelps: "Structured bunker blocks with rest between shots prevent rushed swings — the main cause of heavy or thin exits.",
+    id: "bunker-greenside-24",
+    name: "24-Ball Greenside Bunker",
+    whyItHelps: "Random greenside lies with rest between shots — you pick the wedge for each splash, like on the course.",
     focus: "bunker",
-    club: "56°",
+    bunkerType: "greenside",
+    club: "Your choice",
     ballsPerBlock: 8,
     numBlocks: 3,
     cadenceSeconds: 45,
     practiceMode: "block",
     focusCue: "Open face — splash 2\" behind",
     target: "Pin",
+  },
+  {
+    id: "bunker-fairway-24",
+    name: "24-Ball Fairway Bunker",
+    whyItHelps: "Fairway bunker lies at real yardages — pick the iron or hybrid that clears the lip every time.",
+    focus: "bunker",
+    bunkerType: "fairway",
+    club: "Your choice",
+    ballsPerBlock: 8,
+    numBlocks: 3,
+    cadenceSeconds: 45,
+    practiceMode: "block",
+    focusCue: "Clean strike — clear the lip with margin",
+    target: "Center of green",
   },
   {
     id: "iron-transition-60",
@@ -171,6 +192,17 @@ export function getDrillPresetAvailability(
   if (userBag.length === 0) {
     return { available: false, matchedClubs: [], focusLabel };
   }
+  if (preset.focus === "bunker" && preset.bunkerType) {
+    const matchedClubs = filterClubsForBunkerScenario(
+      userBag.map(e => e.club),
+      preset.bunkerType
+    );
+    return {
+      available: matchedClubs.length > 0,
+      matchedClubs,
+      focusLabel: preset.bunkerType === "fairway" ? "fairway bunker clubs" : focusLabel,
+    };
+  }
   const matchedClubs = pickClubsForBlockDrillPreset(preset, userBag);
   return {
     available: matchedClubs.length > 0,
@@ -182,6 +214,33 @@ export function getDrillPresetAvailability(
 export function loadBlockDrillPreset(id: string, userBag: BagEntry[] = []): SessionConfig | null {
   const preset = BLOCK_DRILL_LIBRARY.find(d => d.id === id);
   if (!preset) return null;
+
+  if (userBag.length === 0) return null;
+
+  if (preset.focus === "bunker" || preset.focus === "chipping") {
+    if (preset.focus === "bunker" && preset.bunkerType) {
+      const matched = filterClubsForBunkerScenario(
+        userBag.map(e => e.club),
+        preset.bunkerType
+      );
+      if (matched.length === 0) return null;
+    }
+    return createBuilderSessionConfig({
+      focus: preset.focus,
+      clubs: [],
+      swingLength: preset.swingLength,
+      ballsPerBlock: preset.ballsPerBlock,
+      numBlocks: preset.numBlocks,
+      cadenceSeconds: preset.cadenceSeconds,
+      practiceMode: preset.practiceMode,
+      focusCue: preset.focusCue,
+      target: preset.target,
+      bunkerType: preset.bunkerType,
+      chippingBlockLie: preset.chippingBlockLie,
+      chippingBlockGreen: preset.chippingBlockGreen,
+      userBag,
+    });
+  }
 
   const clubs = pickClubsForBlockDrillPreset(preset, userBag);
   if (clubs.length === 0) return null;
@@ -196,6 +255,9 @@ export function loadBlockDrillPreset(id: string, userBag: BagEntry[] = []): Sess
     practiceMode: preset.practiceMode,
     focusCue: preset.focusCue,
     target: preset.target,
+    bunkerType: preset.bunkerType,
+    chippingBlockLie: preset.chippingBlockLie,
+    chippingBlockGreen: preset.chippingBlockGreen,
     userBag,
   });
 }

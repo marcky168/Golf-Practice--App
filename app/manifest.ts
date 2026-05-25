@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Golf Practice OS",
     short_name: "Golf OS",
-    description: "Deliberate golf practice sessions. Block, Random, Games. Built for the range.",
+    description: "Deliberate golf practice — Quick Block, Session Builder, Transfer, Games.",
     start_url: "/",
     display: "standalone",
     background_color: "#F5F2E9",
@@ -38,13 +38,13 @@ export default function manifest(): MetadataRoute.Manifest {
     categories: ["sports", "health", "productivity"],
     shortcuts: [
       {
-        name: "Start Block Practice",
+        name: "Quick Block",
         short_name: "Block",
         url: "/practice/block",
       },
       {
-        name: "Random Practice",
-        short_name: "Random",
+        name: "Random / Transfer",
+        short_name: "Transfer",
         url: "/practice/random",
       },
     ],

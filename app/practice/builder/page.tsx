@@ -25,10 +25,17 @@ import {
   resolveSwingLengthForFocus,
   focusSupportsSwingLength,
 } from "@/lib/practice/partial-shots";
-import type { BuilderFocus, BuilderPracticeMode, SessionConfig, SwingLength } from "@/lib/practice/types";
+import type { BuilderFocus, BuilderPracticeMode, BunkerPracticeType, SessionConfig, SwingLength } from "@/lib/practice/types";
 import { NeuroTrainingToggles, neuroFlagsFromState } from "@/components/practice/NeuroTrainingToggles";
 import { SessionRunner } from "@/components/practice/SessionRunner";
 import { SessionRunnerErrorBoundary } from "@/components/practice/SessionRunnerErrorBoundary";
+import { BunkerTypePicker } from "@/components/practice/BunkerTypePicker";
+import { ChipBlockFocusPicker } from "@/components/practice/ChipBlockFocusPicker";
+import { filterClubsForBunkerScenario } from "@/lib/practice/bunker-scenarios";
+import {
+  CHIPPING_GREEN_OPTIONS,
+  CHIPPING_LIE_OPTIONS,
+} from "@/lib/practice/chipping-scenarios";
 import { PreSessionRating } from "@/components/practice/PreSessionRating";
 import { IntentionPicker, type ShapeType, type TrajectoryType } from "@/components/practice/IntentionPicker";
 import { ResumePrompt, clearPartialSession, type PartialSession } from "@/components/practice/ResumePrompt";
@@ -47,9 +54,9 @@ type FlowStep = "wizard" | "pre-session" | "running" | "complete";
 type EntryMode = "custom" | "library";
 
 const PRACTICE_MODES: { value: BuilderPracticeMode; label: string; hint: string }[] = [
-  { value: "block", label: "Block", hint: "Same shot repeated — best for grooving feel" },
-  { value: "random", label: "Random", hint: "Shuffled shots each block — better transfer" },
-  { value: "transition", label: "Block → Random", hint: "First blocks repeat, later blocks shuffle" },
+  { value: "block", label: "Repeat", hint: "Same shot or scenario every ball in a block — best for grooving feel" },
+  { value: "random", label: "Shuffle", hint: "Mix clubs or scenarios within this session (not full-bag random)" },
+  { value: "transition", label: "Repeat → Shuffle", hint: "Groove the first blocks, then shuffle for transfer" },
 ];
 
 export default function PracticeBuilderPage() {
@@ -59,6 +66,9 @@ export default function PracticeBuilderPage() {
   const selectedPreset = BLOCK_DRILL_LIBRARY.find(d => d.id === selectedPresetId) ?? null;
 
   const [focus, setFocus] = useState<BuilderFocus>("full-swing");
+  const [bunkerType, setBunkerType] = useState<BunkerPracticeType>("greenside");
+  const [chipBlockLie, setChipBlockLie] = useState(CHIPPING_LIE_OPTIONS[0].label);
+  const [chipBlockGreen, setChipBlockGreen] = useState<string>(CHIPPING_GREEN_OPTIONS[3]);
   const [selectedClubs, setSelectedClubs] = useState<string[]>([]);
   const [swingLength, setSwingLength] = useState<SwingLength>("full");
   const [ballsPerBlock, setBallsPerBlock] = useState(10);
@@ -95,11 +105,19 @@ export default function PracticeBuilderPage() {
   const effectiveCue = customCue.trim() || focusCue || getFocusCuesForBuilderFocus(focus)[0];
   const totalBalls = ballsPerBlock * numBlocks;
 
+  const showChipBlockFocus =
+    focus === "chipping" && (practiceMode === "block" || practiceMode === "transition");
+
+  const bunkerBagReady =
+    focus !== "bunker" ||
+    filterClubsForBunkerScenario(userBag.map(e => e.club), bunkerType).length > 0;
+
   const canStartCustom =
     isChecklistComplete &&
     isIntentionSet &&
     userBag.length > 0 &&
-    (focus === "chipping" || (clubs.length > 0 && selectedClubs.length > 0));
+    bunkerBagReady &&
+    (focus === "chipping" || focus === "bunker" || (clubs.length > 0 && selectedClubs.length > 0));
 
   const canStartLibrary =
     isChecklistComplete &&
@@ -113,6 +131,13 @@ export default function PracticeBuilderPage() {
     if (params.get("mode") === "library") setEntryMode("library");
     const drillId = params.get("drill");
     if (drillId) setSelectedPresetId(drillId);
+
+    // ?focus= pre-selects a focus when arriving from the dashboard skill picker.
+    const focusParam = params.get("focus");
+    const validFocuses: BuilderFocus[] = ["full-swing", "chipping", "pitching", "putting", "bunker"];
+    if (focusParam && (validFocuses as string[]).includes(focusParam)) {
+      setFocus(focusParam as BuilderFocus);
+    }
 
     if (params.get("repeat") === "1") {
       try {
@@ -188,7 +213,7 @@ export default function PracticeBuilderPage() {
       toast.error("Add clubs on your Profile first.");
       return;
     }
-    if (focus !== "chipping" && selectedClubs.length === 0) {
+    if (focus !== "chipping" && focus !== "bunker" && selectedClubs.length === 0) {
       toast.error("Select at least one club from your profile bag.");
       return;
     }
@@ -206,6 +231,9 @@ export default function PracticeBuilderPage() {
       focusCue: effectiveCue,
       target: target.trim() || undefined,
       userBag,
+      bunkerType: focus === "bunker" ? bunkerType : undefined,
+      chippingBlockLie: showChipBlockFocus ? chipBlockLie : undefined,
+      chippingBlockGreen: showChipBlockFocus ? chipBlockGreen : undefined,
     });
     if (!rawConfig) {
       toast.error("Could not build session with your bag clubs.");
@@ -313,10 +341,10 @@ export default function PracticeBuilderPage() {
 
         <div className="flex items-center gap-3 mb-2">
           <Wrench className="h-8 w-8 text-primary" />
-          <h1 className="text-3xl font-semibold tracking-tighter">Practice Builder</h1>
+          <h1 className="text-3xl font-semibold tracking-tighter">Session Builder</h1>
         </div>
         <p className="text-muted-foreground mb-6">
-          Build your own session or pick a pre-built drill from the library.
+          Full control over blocks, cadence, and scenarios — or start from a drill template.
         </p>
 
         <div className="grid grid-cols-2 gap-2 mb-8">
@@ -342,8 +370,8 @@ export default function PracticeBuilderPage() {
             }`}
           >
             <BookOpen className="h-5 w-5 text-primary" />
-            <span className="font-semibold text-sm">Drill library</span>
-            <span className="text-xs text-muted-foreground">Pre-built block sessions</span>
+            <span className="font-semibold text-sm">Start from template</span>
+            <span className="text-xs text-muted-foreground">Pre-built sessions with your bag</span>
           </button>
         </div>
 
@@ -386,18 +414,31 @@ export default function PracticeBuilderPage() {
             </div>
           </div>
 
-          {focus === "chipping" ? (
+          {focus === "chipping" || focus === "bunker" ? (
+            <div className="space-y-4">
+              {focus === "bunker" && (
+                <BunkerTypePicker value={bunkerType} onChange={setBunkerType} />
+              )}
             <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-4 text-sm space-y-2">
-              <div className="font-semibold text-primary">Scenario-based chipping</div>
+              <div className="font-semibold text-primary">
+                Scenario-based {focus === "bunker" ? "bunker play" : "chipping"}
+              </div>
               <p className="text-muted-foreground leading-relaxed">
                 Each shot presents a <strong>lie condition</strong>, <strong>distance</strong>, and{" "}
                 <strong>green to work with</strong>. You choose the club and shot type yourself —
                 exactly how it works on the course.
               </p>
               <p className="text-xs text-muted-foreground">
-                Examples: "Tight lie · firm turf · 16 yd · 5 ft of green before the hole" or
-                "Fluffy rough · ball up · 22 yd · plenty of green to use".
+                {focus === "bunker"
+                  ? bunkerType === "greenside"
+                    ? 'Example: "Soft fluffy sand · 15 yd · pin tucked front".'
+                    : 'Example: "Fairway bunker · clean lie · 145 yd · firm green".'
+                  : <>
+                      Block = pick a lie and green below, same problem every ball in the block.
+                      Shuffle = new lie every shot. Repeat → Shuffle = groove, then mix.
+                    </>}
               </p>
+            </div>
             </div>
           ) : (
             <div>
@@ -549,7 +590,7 @@ export default function PracticeBuilderPage() {
           />
 
           <div>
-            <Label className="mb-2 block">Block vs random</Label>
+            <Label className="mb-2 block">Session structure</Label>
             <div className="space-y-2">
               {PRACTICE_MODES.map(m => (
                 <button
@@ -569,6 +610,16 @@ export default function PracticeBuilderPage() {
               ))}
             </div>
           </div>
+
+          {showChipBlockFocus && (
+            <ChipBlockFocusPicker
+              lieLabel={chipBlockLie}
+              green={chipBlockGreen}
+              onLieChange={setChipBlockLie}
+              onGreenChange={setChipBlockGreen}
+              forTransition={practiceMode === "transition"}
+            />
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -606,7 +657,9 @@ export default function PracticeBuilderPage() {
 
           {practiceMode === "random" && !skipIntentionCustom && (
             <p className="text-sm text-muted-foreground rounded-xl border bg-muted/40 px-4 py-3 -mt-2">
-              <strong>Random mode:</strong> each shot gets a new random shape and trajectory during the session — no need to set one here.
+              <strong>Shuffle mode:</strong> each shot gets a new random shape and trajectory — no need to set one here.
+              For full-bag course-like mixing, use{" "}
+              <Link href="/practice/random" className="underline text-primary">Random / Transfer</Link>.
             </p>
           )}
 
@@ -615,7 +668,7 @@ export default function PracticeBuilderPage() {
               <Label className="mb-1 block">Shot shape & trajectory</Label>
               {practiceMode === "transition" && (
                 <p className="text-xs text-muted-foreground mb-2">
-                  Applies to block half of the session; random half gets a new shape &amp; trajectory every shot.
+                  Applies to the repeat half of the session; shuffle half gets a new shape &amp; trajectory every shot.
                 </p>
               )}
               <IntentionPicker
@@ -700,7 +753,11 @@ export default function PracticeBuilderPage() {
                 ? { shape: sessionShape, trajectory: sessionTrajectory }
                 : undefined
           }
-          userBagClubs={userBag.map(e => e.club)}
+          userBagClubs={
+            sessionConfig.builderFocus === "chipping"
+              ? getClubsForBuilderFocus("chipping", userBag)
+              : userBag.map(e => e.club)
+          }
           initialRepRecords={resumeData?.repRecords}
           initialCurrentIndex={resumeData?.currentIndex}
           initialSessionStartedAt={resumeData?.sessionStartedAt}

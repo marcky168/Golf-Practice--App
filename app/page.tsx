@@ -132,15 +132,15 @@ export default async function GolfPracticeOSDashboard() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                   <div className="bg-background/60 rounded-xl p-4 border">
-                    <div className="font-semibold mb-1 text-primary">Block Practice</div>
+                    <div className="font-semibold mb-1 text-primary">Quick Block</div>
                     <div className="text-muted-foreground text-xs leading-snug">
-                      Use when working on a specific swing feel or technical change. Deep, repetitive work.
+                      One skill, one club, repeat. Fast when you know what you&apos;re working on.
                     </div>
                   </div>
                   <div className="bg-background/60 rounded-xl p-4 border">
-                    <div className="font-semibold mb-1 text-primary">Random Practice</div>
+                    <div className="font-semibold mb-1 text-primary">Random / Transfer</div>
                     <div className="text-muted-foreground text-xs leading-snug">
-                      The gold standard. Varied, game-like shots that transfer best to the course.
+                      Mixed bag, varied shots — the gold standard for course transfer.
                     </div>
                   </div>
                   <div className="bg-background/60 rounded-xl p-4 border">
@@ -159,7 +159,7 @@ export default async function GolfPracticeOSDashboard() {
 
                 <div className="mt-6 text-center">
                   <p className="text-xs text-muted-foreground">
-                    Start with 20–30 minutes of either Block or Random today. 
+                    Start with 20–30 minutes of Quick Block or Random / Transfer today.
                     You’ll feel the difference.
                   </p>
                 </div>

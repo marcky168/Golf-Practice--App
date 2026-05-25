@@ -42,6 +42,9 @@ export interface Drill {
 /** Simplified skill focus for Practice Builder */
 export type BuilderFocus = "full-swing" | "chipping" | "pitching" | "putting" | "bunker";
 
+/** Greenside splash vs fairway bunker escape — pick one per session (different practice stations). */
+export type BunkerPracticeType = "greenside" | "fairway";
+
 export type SwingLength = "full" | "three-quarter" | "half" | "random";
 
 /** Block → random progression within one session (motor learning) */
@@ -99,8 +102,11 @@ export interface RepRecordSnapshot {
   errorCorrection?: RepErrorCorrection;
   /** Scenario drills: the club the player chose to use */
   scenarioClub?: string;
-  /** Scenario drills: post-shot assessment */
-  scenarioOutcome?: "good" | "mishit" | "wrong-club";
+  /** Scenario drills: post-shot assessment.
+   *  - good / mishit / wrong-club apply to chipping & bunker scenarios.
+   *  - made / missed apply to putting scenarios (streak tracking).
+   */
+  scenarioOutcome?: "good" | "mishit" | "wrong-club" | "made" | "missed";
 }
 
 export interface SessionConfig {
@@ -146,6 +152,11 @@ export interface SessionConfig {
   };
   /** Pre-session self-rating captured before the first shot */
   preSessionState?: { energy: number; focus: number };
+  /** Bunker sessions: greenside splash or fairway escape (one per session) */
+  bunkerType?: BunkerPracticeType;
+  /** Block chipping: fixed lie label and green context for block reps */
+  chippingBlockLie?: string;
+  chippingBlockGreen?: string;
 }
 
 export interface PracticeSession {

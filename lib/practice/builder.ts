@@ -10,7 +10,9 @@ import {
   type BagEntry,
 } from "./bag";
 import { shotForChipping, drillWithinChippingRange } from "./chipping";
-import { generateChippingScenarios } from "./chipping-scenarios";
+import { generateChippingScenariosForSession } from "./chipping-scenarios";
+import { generateBunkerScenarios, bunkerSessionTitle } from "./bunker-scenarios";
+import type { BunkerPracticeType } from "./types";
 import { buildPerRepIntentions, blockUsesRandomMode } from "./intentions";
 import { shotForSwingLength } from "./partial-shots";
 import { attachWarmupToSession } from "./generators";
@@ -124,6 +126,9 @@ export function createBuilderSessionConfig(params: {
   focusCue?: string;
   target?: string;
   userBag?: BagEntry[];
+  bunkerType?: BunkerPracticeType;
+  chippingBlockLie?: string;
+  chippingBlockGreen?: string;
 }): SessionConfig | null {
   const {
     focus,
@@ -139,20 +144,40 @@ export function createBuilderSessionConfig(params: {
   const bag = params.userBag ?? [];
   if (bag.length === 0) return null;
 
-  // Chipping is scenario-based: each rep presents a lie/distance/green problem.
+  // Chipping & bunker are scenario-based: lie, distance, and green context per rep.
   // The player chooses their own club during the session — no club selection needed here.
-  if (focus === "chipping") {
+  if (focus === "chipping" || focus === "bunker") {
     const totalShots = ballsPerBlock * numBlocks;
-    const drills = generateChippingScenarios(totalShots);
+    const bunkerType = params.bunkerType ?? "greenside";
+    const modeLabel =
+      practiceMode === "block" ? "Block" :
+      practiceMode === "random" ? "Random" : "Block → Random";
+    const drills =
+      focus === "chipping"
+        ? generateChippingScenariosForSession({
+            ballsPerBlock,
+            numBlocks,
+            practiceMode,
+            blockLieLabel: params.chippingBlockLie,
+            blockGreen: params.chippingBlockGreen,
+          })
+        : generateBunkerScenarios(totalShots, bunkerType);
+    const title =
+      focus === "chipping"
+        ? `${modeLabel} Chipping · ${numBlocks}×${ballsPerBlock}`
+        : bunkerSessionTitle(bunkerType, `${numBlocks}×${ballsPerBlock}`);
     return attachWarmupToSession(
       {
         type: "block",
-        title: `Chipping Scenarios · ${numBlocks}×${ballsPerBlock}`,
+        title,
         durationMinutes: 0,
         focusAreas: getCategoriesForFocus(focus),
         drills,
         focusCue,
         builderFocus: focus,
+        bunkerType: focus === "bunker" ? bunkerType : undefined,
+        chippingBlockLie: focus === "chipping" ? params.chippingBlockLie : undefined,
+        chippingBlockGreen: focus === "chipping" ? params.chippingBlockGreen : undefined,
         clubs: [],
         ballsPerBlock,
         numBlocks,

@@ -121,6 +121,55 @@ export async function getUserSessions(limit = 50) {
   return data || [];
 }
 
+/**
+ * Per-distance best make-streaks across the user's putting sessions.
+ * Returns a map of distance label ("6 ft") → best consecutive makes ever.
+ */
+export async function getPuttingStreaksByDistance(): Promise<Record<string, number>> {
+  const supabase = await requireSupabaseClient();
+  if (!supabase) return {};
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return {};
+
+  const { data, error } = await supabase
+    .from("practice_sessions")
+    .select("config")
+    .eq("user_id", user.id)
+    .order("started_at", { ascending: false })
+    .limit(200);
+
+  if (error || !data) return {};
+
+  const best: Record<string, number> = {};
+  for (const row of data) {
+    const reps = (row.config as { repRecords?: Array<{
+      drill?: { distance?: string; category?: string };
+      scenarioOutcome?: string;
+    }> } | null)?.repRecords;
+    if (!reps?.length) continue;
+
+    // Walk reps in order; track streak per-distance within this session, take max with global.
+    const sessionBest: Record<string, number> = {};
+    const sessionCurrent: Record<string, number> = {};
+    for (const r of reps) {
+      if (r.drill?.category !== "putting") continue;
+      const dist = r.drill?.distance;
+      if (!dist) continue;
+      if (r.scenarioOutcome === "made") {
+        sessionCurrent[dist] = (sessionCurrent[dist] ?? 0) + 1;
+        sessionBest[dist] = Math.max(sessionBest[dist] ?? 0, sessionCurrent[dist]);
+      } else if (r.scenarioOutcome === "missed") {
+        sessionCurrent[dist] = 0;
+      }
+    }
+    for (const [dist, n] of Object.entries(sessionBest)) {
+      best[dist] = Math.max(best[dist] ?? 0, n);
+    }
+  }
+  return best;
+}
+
 export async function getPlannedSessions() {
   const supabase = await requireSupabaseClient();
   if (!supabase) return [];
