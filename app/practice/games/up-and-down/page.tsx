@@ -5,11 +5,13 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Target, RotateCcw, Save } from "lucide-react";
 import { toast } from "sonner";
-import { savePracticeSession } from "@/app/actions";
+import { saveGameSession } from "@/lib/practice/save-game-session";
 import { buildSessionTiming } from "@/lib/practice/session-duration";
 import { useSessionStartedAt } from "@/lib/practice/use-session-started-at";
 import { IntentionPicker, type ShapeType, type TrajectoryType } from "@/components/practice/IntentionPicker";
 import { RestBetweenShots, RestIntervalSelector } from "@/components/practice/RestBetweenShots";
+import { GameScoreCompare } from "@/components/practice/GameScoreCompare";
+import { useGamePersonalBest } from "@/components/practice/useGamePersonalBest";
 
 const lies = [
   "Tight lie, 15 yards",
@@ -28,6 +30,7 @@ type UpDownResult = {
 };
 
 export default function UpAndDownScramble() {
+  const { personalBest, noteSavedScore, personalBestReady } = useGamePersonalBest("up-and-down");
   const [phase, setPhase] = useState<"setup" | "playing">("setup");
   const sessionStartedAtRef = useSessionStartedAt(phase === "playing");
   const [results, setResults] = useState<UpDownResult[]>([]);
@@ -75,13 +78,13 @@ export default function UpAndDownScramble() {
   async function saveSession() {
     const made = results.filter(r => r.upAndDown).length;
     const timing = buildSessionTiming(sessionStartedAtRef.current ?? Date.now());
-    const res = await savePracticeSession({
+    const res = await saveGameSession({
       type: "game",
       title: "Up & Down Scramble",
       ...timing,
       config: { gameId: "up-and-down", results },
       score: made,
-    });
+    }, noteSavedScore);
     if (res.success) toast.success("Saved!");
     else toast.error("Save failed");
   }
@@ -189,6 +192,8 @@ export default function UpAndDownScramble() {
             </div>
             <div className="text-xl mt-1">up and downs made</div>
           </div>
+
+          <GameScoreCompare gameId="up-and-down" score={madeCount} personalBest={personalBest} personalBestReady={personalBestReady} />
 
           <div className="bg-card border rounded-2xl p-5 text-sm">
             {results.map((r, i) => (

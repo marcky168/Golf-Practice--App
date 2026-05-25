@@ -6,12 +6,15 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Target, RotateCcw, Save, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { calculateLandingZoneScore } from "@/lib/practice/games";
-import { savePracticeSession, getClubBag, type ClubEntry } from "@/app/actions";
+import { getClubBag, type ClubEntry } from "@/app/actions";
+import { saveGameSession } from "@/lib/practice/save-game-session";
 import { buildSessionTiming } from "@/lib/practice/session-duration";
 import { useSessionStartedAt } from "@/lib/practice/use-session-started-at";
 import { markUserHasPracticed } from "@/lib/markHasPracticed";
 import { RestBetweenShots, RestIntervalSelector } from "@/components/practice/RestBetweenShots";
 import { IntentionPicker, type ShapeType, type TrajectoryType } from "@/components/practice/IntentionPicker";
+import { GameScoreCompare } from "@/components/practice/GameScoreCompare";
+import { useGamePersonalBest } from "@/components/practice/useGamePersonalBest";
 
 type ShotScore = 5 | 4 | 3 | 1 | 0;
 
@@ -40,6 +43,7 @@ function isWedgeOrShort(entry: ClubEntry): boolean {
 }
 
 export default function LandingZone8Game() {
+  const { personalBest, noteSavedScore, personalBestReady } = useGamePersonalBest("landing-zone-8");
   const [hasStarted, setHasStarted] = useState(false);
   const sessionStartedAtRef = useSessionStartedAt(hasStarted);
   const [bagLoading, setBagLoading] = useState(true);
@@ -92,7 +96,7 @@ export default function LandingZone8Game() {
   async function saveSession() {
     const result = calculateLandingZoneScore(scores);
     const timing = buildSessionTiming(sessionStartedAtRef.current ?? Date.now());
-    const res = await savePracticeSession({
+    const res = await saveGameSession({
       type: "game",
       title: `Landing Zone 8 — ${effectiveClub}`,
       ...timing,
@@ -106,7 +110,7 @@ export default function LandingZone8Game() {
         result,
       },
       score: result.total,
-    });
+    }, noteSavedScore);
     if (res.success) toast.success("Saved!");
     else toast.error("Save failed");
   }
@@ -280,6 +284,8 @@ export default function LandingZone8Game() {
         <div className="text-lg mt-1">{result.percentage}% landing quality</div>
         <p className="text-sm text-muted-foreground mt-2 px-4">{effectiveLanding}</p>
       </div>
+
+      <GameScoreCompare gameId="landing-zone-8" score={result.total} personalBest={personalBest} personalBestReady={personalBestReady} />
 
       <div className="flex gap-3 mb-3">
         <Button onClick={resetGame} variant="outline" size="lg" className="flex-1">

@@ -5,11 +5,14 @@ import Link from "next/link";
 import { ArrowLeft, Shield, RotateCcw, Save, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { savePracticeSession, getClubBag } from "@/app/actions";
+import { getClubBag } from "@/app/actions";
+import { saveGameSession } from "@/lib/practice/save-game-session";
 import { buildSessionTiming } from "@/lib/practice/session-duration";
 import { useSessionStartedAt } from "@/lib/practice/use-session-started-at";
 import { IntentionPicker, type ShapeType, type TrajectoryType } from "@/components/practice/IntentionPicker";
 import { RestBetweenShots, RestIntervalSelector } from "@/components/practice/RestBetweenShots";
+import { GameScoreCompare } from "@/components/practice/GameScoreCompare";
+import { useGamePersonalBest } from "@/components/practice/useGamePersonalBest";
 import {
   unlockPracticeAudio,
   celebrateBlockComplete,
@@ -138,6 +141,7 @@ function arenaRating(hits: number, total: number): { label: string; className: s
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function Arena3Hole() {
+  const { personalBest, noteSavedScore, personalBestReady } = useGamePersonalBest("arena-3-hole");
   const [phase, setPhase] = useState<Phase>("setup");
   const [bag, setBag] = useState<BagEntry[]>([]);
   const [holes, setHoles] = useState<HoleConfig[]>([]);
@@ -247,13 +251,13 @@ export default function Arena3Hole() {
 
   async function saveSession() {
     const timing = buildSessionTiming(sessionStartedAtRef.current ?? Date.now());
-    const res = await savePracticeSession({
+    const res = await saveGameSession({
       type:  "game",
       title: "3-Hole Arena Test",
       ...timing,
       config: { gameId: "arena-3-hole", holes, results },
       score:  hits,
-    });
+    }, noteSavedScore);
     if (res.success) {
       setSaved(true);
       toast.success("Round saved to history");
@@ -509,6 +513,8 @@ export default function Arena3Hole() {
               <div className="text-2xl font-semibold mt-2 mb-1">{hitRate}% hit rate</div>
               <div className={`text-base font-semibold ${rating.className}`}>{rating.label}</div>
             </div>
+
+            <GameScoreCompare gameId="arena-3-hole" score={hits} personalBest={personalBest} personalBestReady={personalBestReady} />
 
             {/* Hit rate bar */}
             <div>

@@ -6,12 +6,15 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Target, RotateCcw, Save, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { calculateWedgeWindowScore, WEDGE_WINDOW_SHOTS } from "@/lib/practice/games";
-import { savePracticeSession, getClubBag, type ClubEntry } from "@/app/actions";
+import { getClubBag, type ClubEntry } from "@/app/actions";
+import { saveGameSession } from "@/lib/practice/save-game-session";
 import { buildSessionTiming } from "@/lib/practice/session-duration";
 import { useSessionStartedAt } from "@/lib/practice/use-session-started-at";
 import { markUserHasPracticed } from "@/lib/markHasPracticed";
 import { RestBetweenShots, RestIntervalSelector } from "@/components/practice/RestBetweenShots";
 import { IntentionPicker, type ShapeType, type TrajectoryType } from "@/components/practice/IntentionPicker";
+import { GameScoreCompare } from "@/components/practice/GameScoreCompare";
+import { useGamePersonalBest } from "@/components/practice/useGamePersonalBest";
 
 type ShotResult = {
   yards: number;
@@ -26,6 +29,7 @@ function isPitchClub(entry: ClubEntry): boolean {
 }
 
 export default function WedgeWindow6Game() {
+  const { personalBest, noteSavedScore, personalBestReady } = useGamePersonalBest("wedge-window-6");
   const [phase, setPhase] = useState<"setup" | "playing">("setup");
   const sessionStartedAtRef = useSessionStartedAt(phase === "playing");
   const [bagLoading, setBagLoading] = useState(true);
@@ -84,13 +88,13 @@ export default function WedgeWindow6Game() {
   async function saveSession() {
     const summary = calculateWedgeWindowScore(results.map((r) => r.hit));
     const timing = buildSessionTiming(sessionStartedAtRef.current ?? Date.now());
-    const res = await savePracticeSession({
+    const res = await saveGameSession({
       type: "game",
       title: `Wedge Window 6 — ${effectiveClub}`,
       ...timing,
       config: { gameId: "wedge-window-6", club: effectiveClub, results },
       score: summary.made,
-    });
+    }, noteSavedScore);
     if (res.success) toast.success("Saved!");
     else toast.error("Save failed");
   }
@@ -171,6 +175,9 @@ export default function WedgeWindow6Game() {
                     <div className="text-6xl font-semibold text-emerald-600 tabular-nums">{summary.made}/6</div>
                     <div className="text-xl mt-1">pin-high windows</div>
                   </div>
+
+                  <GameScoreCompare gameId="wedge-window-6" score={summary.made} personalBest={personalBest} personalBestReady={personalBestReady} />
+
                   <div className="bg-card border rounded-2xl p-5 text-sm">
                     {results.map((r, i) => (
                       <div key={i} className="flex justify-between py-1.5 border-b last:border-0 gap-2">

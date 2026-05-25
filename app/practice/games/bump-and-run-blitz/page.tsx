@@ -6,12 +6,14 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Target, RotateCcw, Save } from "lucide-react";
 import { toast } from "sonner";
 import { calculateBumpAndRunScore } from "@/lib/practice/games";
-import { savePracticeSession } from "@/app/actions";
+import { saveGameSession } from "@/lib/practice/save-game-session";
 import { buildSessionTiming } from "@/lib/practice/session-duration";
 import { useSessionStartedAt } from "@/lib/practice/use-session-started-at";
 import { markUserHasPracticed } from "@/lib/markHasPracticed";
 import { RestBetweenShots, RestIntervalSelector } from "@/components/practice/RestBetweenShots";
 import { IntentionPicker, type ShapeType, type TrajectoryType } from "@/components/practice/IntentionPicker";
+import { GameScoreCompare } from "@/components/practice/GameScoreCompare";
+import { useGamePersonalBest } from "@/components/practice/useGamePersonalBest";
 
 const LIES = [
   { label: "Fringe bump", detail: "12 yd · low runner off the collar" },
@@ -31,6 +33,7 @@ type LieResult = {
 };
 
 export default function BumpAndRunBlitzGame() {
+  const { personalBest, noteSavedScore, personalBestReady } = useGamePersonalBest("bump-and-run-blitz");
   const [phase, setPhase] = useState<"setup" | "playing">("setup");
   const sessionStartedAtRef = useSessionStartedAt(phase === "playing");
   const [results, setResults] = useState<LieResult[]>([]);
@@ -78,13 +81,13 @@ export default function BumpAndRunBlitzGame() {
   async function saveSession() {
     const summary = calculateBumpAndRunScore(results.map((r) => r.inside8ft));
     const timing = buildSessionTiming(sessionStartedAtRef.current ?? Date.now());
-    const res = await savePracticeSession({
+    const res = await saveGameSession({
       type: "game",
       title: "Bump-and-Run Blitz",
       ...timing,
       config: { gameId: "bump-and-run-blitz", results, summary },
       score: summary.made,
-    });
+    }, noteSavedScore);
     if (res.success) toast.success("Saved!");
     else toast.error("Save failed");
   }
@@ -199,6 +202,8 @@ export default function BumpAndRunBlitzGame() {
                     <div className="text-xl mt-1">inside 8 feet</div>
                     <div className="text-sm text-muted-foreground mt-1">{summary.percentage}% success</div>
                   </div>
+
+                  <GameScoreCompare gameId="bump-and-run-blitz" score={summary.made} personalBest={personalBest} personalBestReady={personalBestReady} />
 
                   <div className="bg-card border rounded-2xl p-5 text-sm">
                     {results.map((r, i) => (

@@ -9,11 +9,13 @@ import {
   calculateLagToTapInScore,
   LAG_TO_TAP_IN_DISTANCES,
 } from "@/lib/practice/games";
-import { savePracticeSession } from "@/app/actions";
+import { saveGameSession } from "@/lib/practice/save-game-session";
 import { buildSessionTiming } from "@/lib/practice/session-duration";
 import { useSessionStartedAt } from "@/lib/practice/use-session-started-at";
 import { markUserHasPracticed } from "@/lib/markHasPracticed";
 import { RestBetweenShots, RestIntervalSelector } from "@/components/practice/RestBetweenShots";
+import { GameScoreCompare } from "@/components/practice/GameScoreCompare";
+import { useGamePersonalBest } from "@/components/practice/useGamePersonalBest";
 
 type BallScore = 5 | 3 | 1 | 0;
 
@@ -25,6 +27,7 @@ const scoreOptions: { value: BallScore; label: string; detail: string }[] = [
 ];
 
 export default function LagToTapInGame() {
+  const { personalBest, noteSavedScore, personalBestReady } = useGamePersonalBest("lag-to-tap-in");
   const [phase, setPhase] = useState<"setup" | "playing">("setup");
   const sessionStartedAtRef = useSessionStartedAt(phase === "playing");
   const [scores, setScores] = useState<BallScore[]>([]);
@@ -57,13 +60,13 @@ export default function LagToTapInGame() {
   async function saveSession() {
     const result = calculateLagToTapInScore(scores);
     const timing = buildSessionTiming(sessionStartedAtRef.current ?? Date.now());
-    const res = await savePracticeSession({
+    const res = await saveGameSession({
       type: "game",
       title: "Lag to Tap-In",
       ...timing,
       config: { gameId: "lag-to-tap-in", scores },
       score: result.total,
-    });
+    }, noteSavedScore);
     if (res.success) toast.success("Saved!");
     else toast.error("Save failed");
   }
@@ -123,6 +126,9 @@ export default function LagToTapInGame() {
               <div className="text-6xl font-semibold text-accent tabular-nums">{result.total}<span className="text-3xl text-muted-foreground">/30</span></div>
               <div className="text-lg mt-1">{result.percentage}% leave quality</div>
             </div>
+
+            <GameScoreCompare gameId="lag-to-tap-in" score={result.total} personalBest={personalBest} personalBestReady={personalBestReady} />
+
             <div className="flex gap-3">
               <Button onClick={resetGame} variant="outline" size="lg" className="flex-1"><RotateCcw className="mr-2 h-4 w-4" /> Again</Button>
               <Button onClick={saveSession} size="lg" className="flex-1"><Save className="mr-2 h-4 w-4" /> Save</Button>

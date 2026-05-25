@@ -6,13 +6,16 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Target, RotateCcw, Save } from "lucide-react";
 import { toast } from "sonner";
 import { calculateBinaryCircuitScore, CLOCK_POSITIONS } from "@/lib/practice/games";
-import { savePracticeSession } from "@/app/actions";
+import { saveGameSession } from "@/lib/practice/save-game-session";
 import { buildSessionTiming } from "@/lib/practice/session-duration";
 import { useSessionStartedAt } from "@/lib/practice/use-session-started-at";
 import { markUserHasPracticed } from "@/lib/markHasPracticed";
 import { RestBetweenShots, RestIntervalSelector } from "@/components/practice/RestBetweenShots";
+import { GameScoreCompare } from "@/components/practice/GameScoreCompare";
+import { useGamePersonalBest } from "@/components/practice/useGamePersonalBest";
 
 export default function ClockDrillGame() {
+  const { personalBest, noteSavedScore, personalBestReady } = useGamePersonalBest("clock-drill");
   const [phase, setPhase] = useState<"setup" | "playing">("setup");
   const sessionStartedAtRef = useSessionStartedAt(phase === "playing");
   const [results, setResults] = useState<boolean[]>([]);
@@ -42,13 +45,13 @@ export default function ClockDrillGame() {
   async function saveSession() {
     const summary = calculateBinaryCircuitScore(results);
     const timing = buildSessionTiming(sessionStartedAtRef.current ?? Date.now());
-    const res = await savePracticeSession({
+    const res = await saveGameSession({
       type: "game",
       title: "Clock Drill",
       ...timing,
       config: { gameId: "clock-drill", results },
       score: summary.made,
-    });
+    }, noteSavedScore);
     if (res.success) toast.success("Saved!");
     else toast.error("Save failed");
   }
@@ -102,6 +105,9 @@ export default function ClockDrillGame() {
               <div className="text-6xl font-semibold text-accent tabular-nums">{summary.made}/4</div>
               <div className="text-xl mt-1">clock complete</div>
             </div>
+
+            <GameScoreCompare gameId="clock-drill" score={summary.made} personalBest={personalBest} personalBestReady={personalBestReady} />
+
             <div className="flex gap-3">
               <Button onClick={resetGame} variant="outline" size="lg" className="flex-1"><RotateCcw className="mr-2 h-4 w-4" /> Again</Button>
               <Button onClick={saveSession} size="lg" className="flex-1"><Save className="mr-2 h-4 w-4" /> Save</Button>

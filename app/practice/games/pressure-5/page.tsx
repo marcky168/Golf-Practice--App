@@ -5,11 +5,14 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Save, Flame, Plus, Trash2, Shuffle, Loader2, Lock } from "lucide-react";
 import { toast } from "sonner";
-import { savePracticeSession, getClubBag, getUserSessions, type ClubEntry } from "@/app/actions";
+import { getClubBag, getUserSessions, type ClubEntry } from "@/app/actions";
+import { saveGameSession } from "@/lib/practice/save-game-session";
 import { buildSessionTiming } from "@/lib/practice/session-duration";
 import { useSessionStartedAt } from "@/lib/practice/use-session-started-at";
 import { SHAPES, TRAJECTORIES, type ShapeType, type TrajectoryType, shapeIcon, trajectoryIcon } from "@/components/practice/IntentionPicker";
 import { RestBetweenShots, RestIntervalSelector } from "@/components/practice/RestBetweenShots";
+import { GameScoreCompare } from "@/components/practice/GameScoreCompare";
+import { useGamePersonalBest } from "@/components/practice/useGamePersonalBest";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Shot = { club: string; distance: string; rule: string; shape?: ShapeType; trajectory?: TrajectoryType };
@@ -49,6 +52,7 @@ function shuffleArray<T>(arr: T[]): T[] {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function PressureInARow() {
+  const { personalBest, noteSavedScore, personalBestReady } = useGamePersonalBest("pressure-5");
   const [phase, setPhase] = useState<Phase>("setup");
   const sessionStartedAtRef = useSessionStartedAt(phase === "playing" || phase === "complete");
   const [selectedLevel, setSelectedLevel] = useState(5);
@@ -145,13 +149,13 @@ export default function PressureInARow() {
 
   async function saveSession() {
     const timing = buildSessionTiming(sessionStartedAtRef.current ?? Date.now());
-    const res = await savePracticeSession({
+    const res = await saveGameSession({
       type: "game",
       title: `Pressure ${selectedLevel}-in-a-Row — ${shots.map(s => s.club).join(", ")}`,
       ...timing,
       config: { gameId: "pressure-5", level: selectedLevel, shots, bestStreak, totalAttempts, shuffled: doShuffle, shotLog },
       score: bestStreak,
-    });
+    }, noteSavedScore);
     if (res.success) toast.success("Saved!");
     else toast.error("Save failed");
   }
@@ -441,6 +445,8 @@ export default function PressureInARow() {
         <div className="text-3xl font-semibold tracking-tight">{selectedLevel} in a Row!</div>
         <div className="text-muted-foreground mt-1">You handled real pressure.</div>
       </div>
+
+      <GameScoreCompare gameId="pressure-5" score={bestStreak} personalBest={personalBest} personalBestReady={personalBestReady} />
 
       {/* Unlock message */}
       {justUnlocked && (

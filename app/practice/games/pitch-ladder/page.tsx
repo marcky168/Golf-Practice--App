@@ -12,12 +12,15 @@ function bagPitchDistances(carry: number): string[] {
   const pcts = [0.40, 0.55, 0.70, 0.85];
   return pcts.map(p => `${Math.round((carry * p) / 5) * 5} yd`);
 }
-import { savePracticeSession, getClubBag, type ClubEntry } from "@/app/actions";
+import { getClubBag, type ClubEntry } from "@/app/actions";
+import { saveGameSession } from "@/lib/practice/save-game-session";
 import { buildSessionTiming } from "@/lib/practice/session-duration";
 import { useSessionStartedAt } from "@/lib/practice/use-session-started-at";
 import { markUserHasPracticed } from "@/lib/markHasPracticed";
 import { RestBetweenShots, RestIntervalSelector } from "@/components/practice/RestBetweenShots";
 import { IntentionPicker, type ShapeType, type TrajectoryType } from "@/components/practice/IntentionPicker";
+import { GameScoreCompare } from "@/components/practice/GameScoreCompare";
+import { useGamePersonalBest } from "@/components/practice/useGamePersonalBest";
 
 type BallScore = 5 | 3 | 1 | 0;
 
@@ -33,6 +36,7 @@ function isPitchClub(entry: ClubEntry): boolean {
 }
 
 export default function PitchLadderGame() {
+  const { personalBest, noteSavedScore, personalBestReady } = useGamePersonalBest("pitch-ladder");
   const [phase, setPhase] = useState<"setup" | "playing">("setup");
   const sessionStartedAtRef = useSessionStartedAt(phase === "playing");
   const [bagLoading, setBagLoading] = useState(true);
@@ -94,7 +98,7 @@ export default function PitchLadderGame() {
   async function saveSession() {
     const result = calculatePitchLadderScore(results, distances);
     const timing = buildSessionTiming(sessionStartedAtRef.current ?? Date.now());
-    const res = await savePracticeSession({
+    const res = await saveGameSession({
       type: "game",
       title: `Pitch Ladder — ${effectiveClub}`,
       ...timing,
@@ -106,7 +110,7 @@ export default function PitchLadderGame() {
         results,
       },
       score: result.total,
-    });
+    }, noteSavedScore);
     if (res.success) toast.success("Saved!");
     else toast.error("Save failed");
   }
@@ -196,6 +200,9 @@ export default function PitchLadderGame() {
                     <div className="text-6xl font-semibold text-accent tabular-nums">{result.total}</div>
                     <div className="text-xl mt-1">out of {result.max} points</div>
                   </div>
+
+                  <GameScoreCompare gameId="pitch-ladder" score={result.total} personalBest={personalBest} personalBestReady={personalBestReady} />
+
                   <div className="bg-card border rounded-2xl p-5">
                     {result.byDistance.map((d, i) => (
                       <div key={i} className="flex justify-between py-1.5 border-b last:border-0 text-sm">

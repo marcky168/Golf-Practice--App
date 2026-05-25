@@ -12,6 +12,7 @@ import { useSessionStartedAt } from "@/lib/practice/use-session-started-at";
 import { markUserHasPracticed } from "@/lib/markHasPracticed";
 import { IntentionPicker, SHAPES, TRAJECTORIES, type ShapeType, type TrajectoryType, shapeIcon, trajectoryIcon } from "@/components/practice/IntentionPicker";
 import { RestBetweenShots, RestIntervalSelector } from "@/components/practice/RestBetweenShots";
+import { GameScoreCompare } from "@/components/practice/GameScoreCompare";
 
 // ─── Types & labels ───────────────────────────────────────────────────────────
 
@@ -45,6 +46,7 @@ export default function TenBallAccuracy() {
   const [clubBag, setClubBag]         = useState<ClubEntry[]>([]);
   const [bestByClub, setBestByClub]   = useState<Record<string, number>>({});
   const [bestByCombo, setBestByCombo] = useState<Record<string, number>>({});
+  const [personalBestReady, setPersonalBestReady] = useState(false);
 
   // Setup
   const [selectedClub, setSelectedClub]     = useState<ClubEntry | null>(null);
@@ -94,6 +96,7 @@ export default function TenBallAccuracy() {
         });
       setBestByClub(bestClub);
       setBestByCombo(bestCombo);
+      setPersonalBestReady(true);
     });
   }, []);
 
@@ -354,8 +357,6 @@ export default function TenBallAccuracy() {
 
   // ── RESULTS ───────────────────────────────────────────────────────────────────
   const result    = calculate10BallScore(scores);
-  const prevBest  = bestByClub[effectiveClub];
-  const isNewBest = prevBest === undefined || result.total > prevBest;
   const comboPB   = sessionShape && sessionTrajectory
     ? bestByCombo[comboKey(effectiveClub, sessionShape, sessionTrajectory)]
     : undefined;
@@ -391,20 +392,12 @@ export default function TenBallAccuracy() {
           </div>
         </div>
 
-        {/* vs personal best */}
-        {prevBest !== undefined && (
-          <div className={`rounded-xl px-4 py-2.5 text-sm flex items-center justify-between ${
-            isNewBest ? "bg-emerald-50 text-emerald-700" : "bg-muted/50 text-muted-foreground"
-          }`}>
-            <div className="flex items-center gap-2">
-              <Trophy className="h-4 w-4" />
-              <span>{isNewBest ? "New personal best!" : `Previous best: ${prevBest}/50`}</span>
-            </div>
-            {!isNewBest && (
-              <span className="font-semibold">{result.total - prevBest > 0 ? "+" : ""}{result.total - prevBest} vs PB</span>
-            )}
-          </div>
-        )}
+        <GameScoreCompare
+          gameId="10-ball-accuracy"
+          score={result.total}
+          personalBest={bestByClub[effectiveClub]}
+          personalBestReady={personalBestReady}
+        />
 
         {/* Zone dots */}
         <div className="mt-4 space-y-1.5">

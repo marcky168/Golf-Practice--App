@@ -5,10 +5,13 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Save, Trophy, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { savePracticeSession, getUserSessions } from "@/app/actions";
+import { getUserSessions } from "@/app/actions";
+import { saveGameSession } from "@/lib/practice/save-game-session";
 import { buildSessionTiming } from "@/lib/practice/session-duration";
 import { useSessionStartedAt } from "@/lib/practice/use-session-started-at";
 import { RestBetweenShots, RestIntervalSelector } from "@/components/practice/RestBetweenShots";
+import { GameScoreCompare } from "@/components/practice/GameScoreCompare";
+import { useGamePersonalBest } from "@/components/practice/useGamePersonalBest";
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 const HEIGHTS  = ["High", "Mid", "Low"]  as const;
@@ -50,6 +53,7 @@ const SHAPE_COLOR: Record<Shape, string> = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function NineShotMatrix() {
+  const { personalBest, noteSavedScore, personalBestReady } = useGamePersonalBest("9-shot-matrix");
   const [selectedClub, setSelectedClub] = useState<string | null>(null);
   const sessionStartedAtRef = useSessionStartedAt(!!selectedClub);
   const [results, setResults] = useState<Record<string, ShotResult>>({});
@@ -110,13 +114,13 @@ export default function NineShotMatrix() {
 
   async function saveSession() {
     const timing = buildSessionTiming(sessionStartedAtRef.current ?? Date.now());
-    const res = await savePracticeSession({
+    const res = await saveGameSession({
       type: "game",
       title: `9-Shot Matrix — ${selectedClub}`,
       ...timing,
       config: { gameId: "9-shot-matrix", club: selectedClub, results },
       score: successCount,
-    });
+    }, noteSavedScore);
     if (res.success) {
       toast.success("Saved!");
       // Update local best so the club picker shows the new score immediately
@@ -331,6 +335,8 @@ export default function NineShotMatrix() {
                "Good baseline — now you know exactly what to work on."}
             </div>
           </div>
+
+          <GameScoreCompare gameId="9-shot-matrix" score={successCount} personalBest={personalBest} personalBestReady={personalBestReady} />
 
           {/* Breakdown by row */}
           <div className="bg-card rounded-2xl border p-5 space-y-3">

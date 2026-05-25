@@ -6,12 +6,14 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Target, RotateCcw, Save } from "lucide-react";
 import { toast } from "sonner";
 import { calculateLagLadderScore } from "@/lib/practice/games";
-import { savePracticeSession } from "@/app/actions";
+import { saveGameSession } from "@/lib/practice/save-game-session";
 import { buildSessionTiming } from "@/lib/practice/session-duration";
 import { useSessionStartedAt } from "@/lib/practice/use-session-started-at";
 import { markUserHasPracticed } from "@/lib/markHasPracticed";
 import { useEffect } from "react";
 import { RestBetweenShots, RestIntervalSelector } from "@/components/practice/RestBetweenShots";
+import { GameScoreCompare } from "@/components/practice/GameScoreCompare";
+import { useGamePersonalBest } from "@/components/practice/useGamePersonalBest";
 
 type BallScore = 5 | 3 | 1 | 0;
 
@@ -24,6 +26,7 @@ const scoreOptions: { value: BallScore; label: string }[] = [
 ];
 
 export default function LagPuttingLadder() {
+  const { personalBest, noteSavedScore, personalBestReady } = useGamePersonalBest("lag-putting-ladder");
   const [phase, setPhase] = useState<"setup" | "playing">("setup");
   const sessionStartedAtRef = useSessionStartedAt(phase === "playing");
   const [results, setResults] = useState<BallScore[][]>([[], [], [], []]); // 4 distances × 3 balls
@@ -70,13 +73,13 @@ export default function LagPuttingLadder() {
   async function saveSession() {
     const result = calculateLagLadderScore(results);
     const timing = buildSessionTiming(sessionStartedAtRef.current ?? Date.now());
-    const res = await savePracticeSession({
+    const res = await saveGameSession({
       type: "game",
       title: "Lag Putting Ladder",
       ...timing,
       config: { gameId: "lag-putting-ladder", results },
       score: result.total,
-    });
+    }, noteSavedScore);
     if (res.success) toast.success("Game saved!");
     else toast.error("Save failed");
   }
@@ -169,6 +172,8 @@ export default function LagPuttingLadder() {
                   </div>
                   <div className="text-xl mt-1">out of {result.max} possible points</div>
                 </div>
+
+                <GameScoreCompare gameId="lag-putting-ladder" score={result.total} personalBest={personalBest} personalBestReady={personalBestReady} />
 
                 <div className="bg-card border rounded-2xl p-5">
                   <div className="font-medium mb-3">Performance by distance</div>

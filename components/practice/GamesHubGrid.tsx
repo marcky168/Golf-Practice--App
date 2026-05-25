@@ -11,33 +11,8 @@ import {
   GAME_FILTERS,
   type GameFilterId,
 } from "@/lib/practice/games";
+import { formatGameScore } from "@/lib/practice/game-scores";
 import type { GameDefinition } from "@/lib/practice/types";
-
-const scoreLabel: Record<string, (score: number) => string> = {
-  "10-ball-accuracy": (s) => `${s} / 50 pts`,
-  "up-and-down": (s) => `${s} / 6 up & downs`,
-  "lag-putting-ladder": (s) => `${s} / 60 pts`,
-  "9-shot-matrix": (s) => `${s} / 9 shots`,
-  "pressure-5": (s) =>
-    s >= 15
-      ? "🔥🔥🔥 15 in a row ✓"
-      : s >= 10
-        ? "🔥🔥 10 in a row ✓"
-        : s >= 5
-          ? "🔥 5 in a row ✓"
-          : `Best streak: ${s}`,
-  "random-3-hole": (s) => `${s.toFixed(1)} / 5 avg feel`,
-  "arena-3-hole": (s) => (s === 6 ? "6 / 6 — Perfect 🏆" : `${s} / 6 hits`),
-  "chip-ladder": (s) => `${s} / 60 pts`,
-  "landing-zone-8": (s) => `${s} / 40 pts`,
-  "bump-and-run-blitz": (s) => `${s} / 6 inside 8 ft`,
-  "makeable-putt-ladder": (s) => `${s} / 5 made`,
-  "clock-drill": (s) => (s === 4 ? "4 / 4 — Perfect" : `${s} / 4 made`),
-  "lag-to-tap-in": (s) => `${s} / 30 pts`,
-  "pitch-ladder": (s) => `${s} / 60 pts`,
-  "pin-high-8": (s) => `${s} / 40 pts`,
-  "wedge-window-6": (s) => `${s} / 6 pin-high`,
-};
 
 const difficultyLabel: Record<GameDefinition["difficulty"], string> = {
   beginner: "Beginner",
@@ -101,7 +76,7 @@ export function GamesHubGrid({ games, bestScores, attemptCounts }: Props) {
             const pb = bestScores[game.id];
             const attempts = attemptCounts[game.id] ?? 0;
             const hasPB = pb !== undefined;
-            const fmt = scoreLabel[game.id];
+            const fmt = (s: number) => formatGameScore(game.id, s);
 
             return (
               <Card key={game.id} className="golf-card flex flex-col">
@@ -151,7 +126,7 @@ export function GamesHubGrid({ games, bestScores, attemptCounts }: Props) {
                         <div
                           className={`text-sm font-semibold mt-0.5 ${hasPB ? "text-foreground" : "text-muted-foreground"}`}
                         >
-                          {hasPB && fmt ? fmt(pb) : "No attempts yet"}
+                          {hasPB ? fmt(pb) : "No attempts yet"}
                         </div>
                       </div>
                     </div>

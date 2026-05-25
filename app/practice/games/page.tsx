@@ -4,9 +4,7 @@ import { GAMES } from "@/lib/practice/games";
 import { getUserSessions } from "@/app/actions";
 import { GamesHubGrid } from "@/components/practice/GamesHubGrid";
 
-function isBetter(_gameId: string, a: number, b: number) {
-  return a > b;
-}
+import { personalBestFromSessions } from "@/lib/practice/game-scores";
 
 export default async function GamesHub() {
   const sessions = await getUserSessions(500);
@@ -20,10 +18,12 @@ export default async function GamesHub() {
       const gameId = (s.config as { gameId?: string } | null)?.gameId;
       if (!gameId) return;
       attemptCounts[gameId] = (attemptCounts[gameId] ?? 0) + 1;
-      if (bestScores[gameId] === undefined || isBetter(gameId, s.score, bestScores[gameId])) {
-        bestScores[gameId] = s.score;
-      }
     });
+
+  for (const game of GAMES) {
+    const pb = personalBestFromSessions(sessions, game.id);
+    if (pb !== undefined) bestScores[game.id] = pb;
+  }
 
   return (
     <div className="min-h-screen bg-background pb-20 max-w-4xl mx-auto px-4 pt-6">

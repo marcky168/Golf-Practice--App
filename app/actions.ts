@@ -59,7 +59,7 @@ export async function savePracticeSession(input: SaveSessionInput) {
     notes: input.notes || null,
     overall_feel: input.overallFeel || null,
     balls_used: input.ballsUsed || null,
-    score: input.score || null,
+    score: input.score ?? null,
     started_at: startedAt,
     ended_at: endedAt,
   });
@@ -71,6 +71,7 @@ export async function savePracticeSession(input: SaveSessionInput) {
 
   revalidatePath("/history");
   revalidatePath("/");
+  revalidatePath("/practice/games");
 
   return { success: true };
 }

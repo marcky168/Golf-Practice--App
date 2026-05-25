@@ -54,6 +54,13 @@ These tracked different things and appeared in the same vertical flow, making th
 **Fix:** Rewrote the drills page with a `step` state machine (list → running → complete) identical to the builder pattern.  
 **Lesson:** When a page is a selection UI for something the user will then *do*, the page should own the doing — not redirect to another page's wizard.
 
+### Game personal best reset after Save + Try Again
+**Bug:** Finish game → Save Session → Try Again → second completion still showed "First attempt" with no personal best.  
+**Root cause:** `useGamePersonalBest` only fetched history once on mount; saving on the same page never updated in-memory PB state. Secondary: `score: input.score || null` dropped legitimate zero scores.  
+**Fix:** `noteSavedScore()` merges saved score into hook state after successful save; `saveGameSession()` wrapper used by all PB-tracked games.  
+**Follow-up:** `GameScoreCompare` freezes beat/tie/miss at completion so saving a new PB does not flip the banner to "tied".  
+**Lesson:** Any client-side "best so far" display must update optimistically after writes when the user can replay without navigating away. Separate "comparison baseline" from "live all-time best" when save updates the latter.
+
 ---
 
 ## Standing rules derived from errors above

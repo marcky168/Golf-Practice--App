@@ -69,6 +69,10 @@ Updated at the end of every session.
 **Discoverability:** Violet card on dashboard (appears after 3+ sessions) + "Shot Insights →" link in History trends header. Not added to BottomNav (5 items would be cramped on mobile).  
 **Min reps thresholds:** Club = 3, Shape = 5, Club+Shape combo = 3.
 
+### Game PB updates after save on same page
+**Decision:** `useGamePersonalBest` returns `{ personalBest, noteSavedScore, refresh }`. All game pages save via `saveGameSession()` which calls `noteSavedScore` after a successful write so Try Again compares against the just-saved round without a full reload.  
+**Also:** `savePracticeSession` uses `score: input.score ?? null` (not `||`) so a score of `0` persists. Games hub revalidated on save.
+
 ---
 
 ## Architectural invariants (never change without discussion)

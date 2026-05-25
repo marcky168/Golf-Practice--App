@@ -5,12 +5,15 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RotateCcw, Save, Shuffle } from "lucide-react";
 import { toast } from "sonner";
-import { savePracticeSession, getClubBag } from "@/app/actions";
+import { getClubBag } from "@/app/actions";
+import { saveGameSession } from "@/lib/practice/save-game-session";
 import { buildSessionTiming } from "@/lib/practice/session-duration";
 import { useSessionStartedAt } from "@/lib/practice/use-session-started-at";
 import type { Drill, SkillCategory } from "@/lib/practice/types";
 import { IntentionPicker, type ShapeType, type TrajectoryType } from "@/components/practice/IntentionPicker";
 import { RestBetweenShots, RestIntervalSelector } from "@/components/practice/RestBetweenShots";
+import { GameScoreCompare } from "@/components/practice/GameScoreCompare";
+import { useGamePersonalBest } from "@/components/practice/useGamePersonalBest";
 
 type ShotEntry = { drill: Drill; rating: number; shape?: ShapeType; trajectory?: TrajectoryType };
 type BagEntry  = { club: string; carry: number };
@@ -106,6 +109,7 @@ function generateHoles(bag: BagEntry[]): Array<{ holeNumber: number; par: 3|4|5;
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function Random3Hole() {
+  const { personalBest, noteSavedScore, personalBestReady } = useGamePersonalBest("random-3-hole");
   const [bag, setBag] = useState<BagEntry[]>([]);
   const [holes, setHoles] = useState<ReturnType<typeof generateHoles>>([]);
   const sessionStartedAtRef = useSessionStartedAt(holes.length > 0);
@@ -186,13 +190,13 @@ export default function Random3Hole() {
       ? (shotEntries.reduce((a, b) => a + b.rating, 0) / shotEntries.length)
       : 0;
     const timing = buildSessionTiming(sessionStartedAtRef.current ?? Date.now());
-    const res = await savePracticeSession({
+    const res = await saveGameSession({
       type: "game",
       title: "Random 3-Hole Challenge",
       ...timing,
       config: { gameId: "random-3-hole", shotEntries, holes },
       score: Math.round(avg * 10) / 10,
-    });
+    }, noteSavedScore);
     if (res.success) toast.success("Saved!");
     else toast.error("Save failed");
   }
@@ -285,12 +289,18 @@ export default function Random3Hole() {
         {/* ── RESULTS ─────────────────────────────────────────────────── */}
         {isComplete && (
           <div className="space-y-6">
+            {(() => {
+              const avgScore = Math.round((shotEntries.reduce((a, b) => a + b.rating, 0) / shotEntries.length) * 10) / 10;
+              return (
+                <>
             <div className="text-center py-6 bg-card rounded-2xl border">
               <div className="text-5xl font-semibold tracking-tighter text-accent tabular-nums">
-                {(shotEntries.reduce((a, b) => a + b.rating, 0) / shotEntries.length).toFixed(1)}
+                {avgScore}
               </div>
               <div className="text-xl">average feel out of 5</div>
             </div>
+
+            <GameScoreCompare gameId="random-3-hole" score={avgScore} personalBest={personalBest} personalBestReady={personalBestReady} />
 
             <div className="bg-card border rounded-2xl p-5 text-sm space-y-2">
               {holes.map(h => (
@@ -324,6 +334,9 @@ export default function Random3Hole() {
             <Link href="/practice/games">
               <Button variant="ghost" className="w-full">Back to Games</Button>
             </Link>
+                </>
+              );
+            })()}
           </div>
         )}
       </div>

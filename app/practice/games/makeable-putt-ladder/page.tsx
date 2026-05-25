@@ -9,13 +9,16 @@ import {
   calculateBinaryCircuitScore,
   MAKEABLE_PUTT_DISTANCES,
 } from "@/lib/practice/games";
-import { savePracticeSession } from "@/app/actions";
+import { saveGameSession } from "@/lib/practice/save-game-session";
 import { buildSessionTiming } from "@/lib/practice/session-duration";
 import { useSessionStartedAt } from "@/lib/practice/use-session-started-at";
 import { markUserHasPracticed } from "@/lib/markHasPracticed";
 import { RestBetweenShots, RestIntervalSelector } from "@/components/practice/RestBetweenShots";
+import { GameScoreCompare } from "@/components/practice/GameScoreCompare";
+import { useGamePersonalBest } from "@/components/practice/useGamePersonalBest";
 
 export default function MakeablePuttLadderGame() {
+  const { personalBest, noteSavedScore, personalBestReady } = useGamePersonalBest("makeable-putt-ladder");
   const [phase, setPhase] = useState<"setup" | "playing">("setup");
   const sessionStartedAtRef = useSessionStartedAt(phase === "playing");
   const [results, setResults] = useState<boolean[]>([]);
@@ -47,13 +50,13 @@ export default function MakeablePuttLadderGame() {
   async function saveSession() {
     const summary = calculateBinaryCircuitScore(results);
     const timing = buildSessionTiming(sessionStartedAtRef.current ?? Date.now());
-    const res = await savePracticeSession({
+    const res = await saveGameSession({
       type: "game",
       title: "Makeable Putt Ladder",
       ...timing,
       config: { gameId: "makeable-putt-ladder", results, distances: [...MAKEABLE_PUTT_DISTANCES] },
       score: summary.made,
-    });
+    }, noteSavedScore);
     if (res.success) toast.success("Saved!");
     else toast.error("Save failed");
   }
@@ -125,6 +128,9 @@ export default function MakeablePuttLadderGame() {
               <div className="text-6xl font-semibold text-emerald-600 tabular-nums">{summary.made}/5</div>
               <div className="text-xl mt-1">putts made</div>
             </div>
+
+            <GameScoreCompare gameId="makeable-putt-ladder" score={summary.made} personalBest={personalBest} personalBestReady={personalBestReady} />
+
             <div className="bg-card border rounded-2xl p-5 text-sm">
               {MAKEABLE_PUTT_DISTANCES.map((d, i) => (
                 <div key={d} className="flex justify-between py-1.5 border-b last:border-0">

@@ -6,12 +6,15 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Target, RotateCcw, Save, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { calculatePinHighScore, PIN_HIGH_YARDAGES } from "@/lib/practice/games";
-import { savePracticeSession, getClubBag, type ClubEntry } from "@/app/actions";
+import { getClubBag, type ClubEntry } from "@/app/actions";
+import { saveGameSession } from "@/lib/practice/save-game-session";
 import { buildSessionTiming } from "@/lib/practice/session-duration";
 import { useSessionStartedAt } from "@/lib/practice/use-session-started-at";
 import { markUserHasPracticed } from "@/lib/markHasPracticed";
 import { RestBetweenShots, RestIntervalSelector } from "@/components/practice/RestBetweenShots";
 import { IntentionPicker, type ShapeType, type TrajectoryType } from "@/components/practice/IntentionPicker";
+import { GameScoreCompare } from "@/components/practice/GameScoreCompare";
+import { useGamePersonalBest } from "@/components/practice/useGamePersonalBest";
 
 type ShotScore = 5 | 4 | 3 | 1 | 0;
 
@@ -28,6 +31,7 @@ function isPitchClub(entry: ClubEntry): boolean {
 }
 
 export default function PinHigh8Game() {
+  const { personalBest, noteSavedScore, personalBestReady } = useGamePersonalBest("pin-high-8");
   const [hasStarted, setHasStarted] = useState(false);
   const sessionStartedAtRef = useSessionStartedAt(hasStarted);
   const [bagLoading, setBagLoading] = useState(true);
@@ -75,13 +79,13 @@ export default function PinHigh8Game() {
   async function saveSession() {
     const result = calculatePinHighScore(scores);
     const timing = buildSessionTiming(sessionStartedAtRef.current ?? Date.now());
-    const res = await savePracticeSession({
+    const res = await saveGameSession({
       type: "game",
       title: `Pin High 8 — ${effectiveClub}`,
       ...timing,
       config: { gameId: "pin-high-8", club: effectiveClub, scores, yardages: [...PIN_HIGH_YARDAGES] },
       score: result.total,
-    });
+    }, noteSavedScore);
     if (res.success) toast.success("Saved!");
     else toast.error("Save failed");
   }
@@ -155,6 +159,9 @@ export default function PinHigh8Game() {
         <div className="text-6xl font-semibold text-accent tabular-nums">{result.total}<span className="text-3xl text-muted-foreground">/40</span></div>
         <div className="text-lg mt-1">{result.percentage}% pin-high quality</div>
       </div>
+
+      <GameScoreCompare gameId="pin-high-8" score={result.total} personalBest={personalBest} personalBestReady={personalBestReady} />
+
       <div className="flex gap-3 mb-3">
         <Button onClick={resetGame} variant="outline" size="lg" className="flex-1"><RotateCcw className="mr-2 h-4 w-4" /> Again</Button>
         <Button onClick={saveSession} size="lg" className="flex-1"><Save className="mr-2 h-4 w-4" /> Save</Button>

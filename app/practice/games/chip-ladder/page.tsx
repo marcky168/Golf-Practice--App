@@ -6,12 +6,15 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Target, RotateCcw, Save, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { calculateChipLadderScore, CHIP_LADDER_DISTANCES } from "@/lib/practice/games";
-import { savePracticeSession, getClubBag, type ClubEntry } from "@/app/actions";
+import { getClubBag, type ClubEntry } from "@/app/actions";
+import { saveGameSession } from "@/lib/practice/save-game-session";
 import { buildSessionTiming } from "@/lib/practice/session-duration";
 import { useSessionStartedAt } from "@/lib/practice/use-session-started-at";
 import { markUserHasPracticed } from "@/lib/markHasPracticed";
 import { RestBetweenShots, RestIntervalSelector } from "@/components/practice/RestBetweenShots";
 import { IntentionPicker, type ShapeType, type TrajectoryType } from "@/components/practice/IntentionPicker";
+import { GameScoreCompare } from "@/components/practice/GameScoreCompare";
+import { useGamePersonalBest } from "@/components/practice/useGamePersonalBest";
 
 type BallScore = 5 | 3 | 1 | 0;
 
@@ -30,6 +33,7 @@ function isWedgeOrShort(entry: ClubEntry): boolean {
 }
 
 export default function ChipLadderGame() {
+  const { personalBest, noteSavedScore, personalBestReady } = useGamePersonalBest("chip-ladder");
   const [phase, setPhase] = useState<"setup" | "playing">("setup");
   const sessionStartedAtRef = useSessionStartedAt(phase === "playing");
   const [bagLoading, setBagLoading] = useState(true);
@@ -89,7 +93,7 @@ export default function ChipLadderGame() {
   async function saveSession() {
     const result = calculateChipLadderScore(results);
     const timing = buildSessionTiming(sessionStartedAtRef.current ?? Date.now());
-    const res = await savePracticeSession({
+    const res = await saveGameSession({
       type: "game",
       title: `Chip Ladder — ${effectiveClub}`,
       ...timing,
@@ -101,7 +105,7 @@ export default function ChipLadderGame() {
         results,
       },
       score: result.total,
-    });
+    }, noteSavedScore);
     if (res.success) toast.success("Game saved!");
     else toast.error("Save failed");
   }
@@ -250,6 +254,8 @@ export default function ChipLadderGame() {
                     </div>
                     <div className="text-xl mt-1">out of {result.max} points</div>
                   </div>
+
+                  <GameScoreCompare gameId="chip-ladder" score={result.total} personalBest={personalBest} personalBestReady={personalBestReady} />
 
                   <div className="bg-card border rounded-2xl p-5">
                     <div className="font-medium mb-3">By distance</div>
