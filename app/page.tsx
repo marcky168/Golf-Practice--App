@@ -84,13 +84,18 @@ export default async function GolfPracticeOSDashboard() {
   return (
     <div className="min-h-screen bg-background pb-20">
 
-      {/* Full-width green hero banner */}
-      <div className="bg-primary w-full">
-        <div className="max-w-7xl mx-auto px-4 pt-8 pb-10">
+      {/* Hero — gradient banner with white skill cards */}
+      <div className="dashboard-hero w-full">
+        <div className="dashboard-hero-inner max-w-7xl mx-auto px-4 pt-8 pb-10">
           <WelcomeHint />
           <div className="mb-6">
-            <h1 className="text-4xl font-semibold tracking-tighter text-primary-foreground">What are you practicing today?</h1>
-            <p className="text-lg text-primary-foreground/75 mt-2">Focused sessions. Real improvement. No fluff.</p>
+            <h1 className="text-4xl font-semibold tracking-tighter text-white drop-shadow-sm">
+              What are you practicing today?
+            </h1>
+            <p className="text-lg text-white/80 mt-2">
+              Focused sessions. Real improvement.{" "}
+              <span className="text-amber-200/95 font-medium">No fluff.</span>
+            </p>
           </div>
 
           <DashboardHero loggedIn={!!user} />
