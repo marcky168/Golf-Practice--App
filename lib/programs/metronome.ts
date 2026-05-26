@@ -128,6 +128,15 @@ export class Metronome {
         duration: 0.04,
         stopAt: 0.05,
       });
+    } else {
+      // Keep a quiet guide click so low-BPM cycles never feel silent.
+      this.scheduleTone(time, {
+        type: "square",
+        frequency: 760,
+        gain: 0.06,
+        duration: 0.02,
+        stopAt: 0.03,
+      });
     }
 
     this.cycleBeat = (this.cycleBeat + 1) % this.TOUR_TEMPO_CYCLE_LENGTH;
