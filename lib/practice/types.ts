@@ -157,6 +157,10 @@ export interface SessionConfig {
   /** Block chipping: fixed lie label and green context for block reps */
   chippingBlockLie?: string;
   chippingBlockGreen?: string;
+  /** Programs feature: identifies this session as part of a structured program */
+  programId?: string;
+  /** Programs feature: per-session log (good/total shots, checks, notes) — opaque to existing code */
+  programLog?: unknown;
 }
 
 export interface PracticeSession {
