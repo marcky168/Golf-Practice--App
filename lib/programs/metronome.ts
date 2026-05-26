@@ -16,7 +16,7 @@ export class Metronome {
   private schedulerId: number | null = null;
   private readonly LOOKAHEAD_MS = 25;       // how often the scheduler runs
   private readonly SCHEDULE_AHEAD_SEC = 0.1; // schedule this far into the future
-  private readonly TOUR_TEMPO_CYCLE_LENGTH = 4; // 3 beats backswing + 1 downswing; beats 1-2 are silent
+  private readonly TOUR_TEMPO_CYCLE_LENGTH = 4; // 3 beats backswing + 1 downswing; beats 1-2 use quiet guide clicks
   private readonly TOUR_TEMPO_TRANSITION_BEAT = 3; // index 3 in a 4-beat cycle
 
   constructor(bpm: number = 60, mode: "beat" | "tour-tempo" = "beat") {
