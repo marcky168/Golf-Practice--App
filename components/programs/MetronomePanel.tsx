@@ -7,23 +7,28 @@ import { Play, Pause, Minus, Plus } from "lucide-react";
 
 interface Props {
   defaultBpm?: number;
+  defaultMode?: "beat" | "tour-tempo";
   /** Compact mode: smaller footprint for embedding inside drill cards */
   compact?: boolean;
 }
 
-export function MetronomePanel({ defaultBpm = 60, compact = false }: Props) {
+export function MetronomePanel({
+  defaultBpm = 60,
+  defaultMode = "beat",
+  compact = false,
+}: Props) {
   const metronomeRef = useRef<Metronome | null>(null);
   const [bpm, setBpm] = useState(defaultBpm);
-  const [mode, setMode] = useState<"beat" | "tour-tempo">("tour-tempo");
+  const [mode, setMode] = useState<"beat" | "tour-tempo">(defaultMode);
   const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
-    metronomeRef.current = new Metronome(defaultBpm);
+    metronomeRef.current = new Metronome(defaultBpm, defaultMode);
     return () => {
       metronomeRef.current?.destroy();
       metronomeRef.current = null;
     };
-  }, [defaultBpm]);
+  }, [defaultBpm, defaultMode]);
 
   useEffect(() => {
     metronomeRef.current?.setMode(mode);
@@ -37,7 +42,6 @@ export function MetronomePanel({ defaultBpm = 60, compact = false }: Props) {
       setPlaying(false);
     } else {
       m.setBPM(bpm);
-      m.setMode(mode);
       m.start();
       setPlaying(true);
     }
@@ -51,10 +55,12 @@ export function MetronomePanel({ defaultBpm = 60, compact = false }: Props) {
 
   return (
     <div className={`rounded-2xl border bg-card ${compact ? "px-3 py-2" : "px-4 py-3"} space-y-2`}>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Metronome mode">
         <button
           type="button"
           onClick={() => setMode("tour-tempo")}
+          role="radio"
+          aria-checked={mode === "tour-tempo"}
           className={`min-h-[38px] rounded-lg border text-xs font-semibold ${
             mode === "tour-tempo"
               ? "border-primary bg-primary/10 text-primary"
@@ -67,6 +73,8 @@ export function MetronomePanel({ defaultBpm = 60, compact = false }: Props) {
         <button
           type="button"
           onClick={() => setMode("beat")}
+          role="radio"
+          aria-checked={mode === "beat"}
           className={`min-h-[38px] rounded-lg border text-xs font-semibold ${
             mode === "beat"
               ? "border-primary bg-primary/10 text-primary"

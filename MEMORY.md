@@ -82,3 +82,12 @@ Updated at the end of every session.
 - **Audio must never throw.** All audio paths are wrapped in try/catch. iOS requires a user-gesture unlock before any sound plays (`unlockPracticeAudio()` must be called on the first user tap of any session).
 - **Warm-up shots are exempt from error correction gating** — they exist for feel/tempo, not for data collection.
 - **Session types are locked:** `"block" | "random" | "mixed" | "game" | "planned"`. Do not add new types.
+
+---
+
+## Session — 2026-05-26
+
+### Program metronome now supports Tour Tempo-style cadence
+**Decision:** Extended `Metronome` with two modes: `beat` (classic click every beat) and `tour-tempo` (4-beat cycle with audible tones on beat 1 and beat 4 for a 3:1 backswing:downswing feel). Added a mode toggle in `MetronomePanel` and set program compile blocks to default to `tour-tempo` explicitly.  
+**Why:** The driver program drills repeatedly reference tempo work and the user asked for Tour Tempo-like behavior. Keeping both modes preserves backward compatibility while enabling the 3:1 training cadence where needed.  
+**Also added:** Radio semantics (`radiogroup`, `role="radio"`, `aria-checked`) for metronome mode controls to improve accessibility on mobile.

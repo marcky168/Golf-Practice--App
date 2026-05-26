@@ -9,16 +9,19 @@
 export class Metronome {
   private ctx: AudioContext | null = null;
   private bpm: number = 60;
-  private mode: "beat" | "tour-tempo" = "tour-tempo";
+  private mode: "beat" | "tour-tempo" = "beat";
   private isRunning = false;
   private nextTickTime = 0;
   private cycleBeat = 0;
   private schedulerId: number | null = null;
   private readonly LOOKAHEAD_MS = 25;       // how often the scheduler runs
   private readonly SCHEDULE_AHEAD_SEC = 0.1; // schedule this far into the future
+  private readonly TOUR_TEMPO_CYCLE_LENGTH = 4; // 3 beats backswing + 1 downswing; beats 1-2 are silent
+  private readonly TOUR_TEMPO_TRANSITION_BEAT = 3; // index 3 in a 4-beat cycle
 
-  constructor(bpm: number = 60) {
+  constructor(bpm: number = 60, mode: "beat" | "tour-tempo" = "beat") {
     this.bpm = bpm;
+    this.mode = mode;
   }
 
   setBPM(bpm: number) {
@@ -106,9 +109,8 @@ export class Metronome {
   }
 
   private scheduleTourTempoTick(time: number) {
-    const cycleLength = 4; // 3 beats backswing + 1 beat downswing
     const isBackswingStart = this.cycleBeat === 0;
-    const isTransition = this.cycleBeat === 3;
+    const isTransition = this.cycleBeat === this.TOUR_TEMPO_TRANSITION_BEAT;
 
     if (isBackswingStart) {
       this.scheduleTone(time, {
@@ -128,7 +130,7 @@ export class Metronome {
       });
     }
 
-    this.cycleBeat = (this.cycleBeat + 1) % cycleLength;
+    this.cycleBeat = (this.cycleBeat + 1) % this.TOUR_TEMPO_CYCLE_LENGTH;
   }
 
   private scheduleTone(

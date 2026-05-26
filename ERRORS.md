@@ -70,3 +70,16 @@ These tracked different things and appeared in the same vertical flow, making th
 3. **Navigation consistency check before shipping any new feature** — if it appears in one nav entry point, it must appear in all relevant ones.
 4. **Use session title (not type) for human-readable "most used" displays.**
 5. **When a UI gains phase awareness, audit any data fields that were compensating for the lack of it.**
+
+---
+
+## Session — 2026-05-26
+
+### `npm run lint` currently fails because `next lint` is not valid in this setup
+**Bug:** Running `npm run lint` fails with:
+```
+Invalid project directory provided, no such directory: /home/runner/work/Golf-Practice--App/Golf-Practice--App/lint
+```
+**Root cause:** The project is on Next.js 16 where invoking `next lint` via this script path currently resolves incorrectly in this environment.  
+**Workaround used in this session:** Relied on `npm run typecheck` and `npm run build` for validation while recording lint failure as pre-existing tooling/config behavior.  
+**Lesson:** Keep lint command compatibility aligned with the current Next.js major version before depending on it as a required validation gate.

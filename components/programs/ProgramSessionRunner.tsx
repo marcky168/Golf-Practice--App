@@ -615,7 +615,7 @@ function CompileBlock({
           <div className="text-xs uppercase tracking-widest text-muted-foreground mb-2 font-semibold">
             Metronome
           </div>
-          <MetronomePanel defaultBpm={metronomeDrill.metronomeBPM} />
+          <MetronomePanel defaultBpm={metronomeDrill.metronomeBPM} defaultMode="tour-tempo" />
         </div>
       )}
 
