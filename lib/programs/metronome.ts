@@ -9,8 +9,10 @@
 export class Metronome {
   private ctx: AudioContext | null = null;
   private bpm: number = 60;
+  private mode: "beat" | "tour-tempo" = "tour-tempo";
   private isRunning = false;
   private nextTickTime = 0;
+  private cycleBeat = 0;
   private schedulerId: number | null = null;
   private readonly LOOKAHEAD_MS = 25;       // how often the scheduler runs
   private readonly SCHEDULE_AHEAD_SEC = 0.1; // schedule this far into the future
@@ -25,6 +27,14 @@ export class Metronome {
 
   getBPM(): number {
     return this.bpm;
+  }
+
+  setMode(mode: "beat" | "tour-tempo") {
+    this.mode = mode;
+  }
+
+  getMode(): "beat" | "tour-tempo" {
+    return this.mode;
   }
 
   isPlaying(): boolean {
@@ -45,6 +55,7 @@ export class Metronome {
 
     this.isRunning = true;
     this.nextTickTime = this.ctx.currentTime + 0.05;
+    this.cycleBeat = 0;
     this.schedulerLoop();
   }
 
@@ -77,16 +88,70 @@ export class Metronome {
 
   private scheduleTick(time: number) {
     if (!this.ctx) return;
+    if (this.mode === "tour-tempo") {
+      this.scheduleTourTempoTick(time);
+      return;
+    }
+    this.scheduleBeatTick(time);
+  }
+
+  private scheduleBeatTick(time: number) {
+    this.scheduleTone(time, {
+      type: "square",
+      frequency: 1000,
+      gain: 0.18,
+      duration: 0.05,
+      stopAt: 0.06,
+    });
+  }
+
+  private scheduleTourTempoTick(time: number) {
+    const cycleLength = 4; // 3 beats backswing + 1 beat downswing
+    const isBackswingStart = this.cycleBeat === 0;
+    const isTransition = this.cycleBeat === 3;
+
+    if (isBackswingStart) {
+      this.scheduleTone(time, {
+        type: "triangle",
+        frequency: 1480,
+        gain: 0.24,
+        duration: 0.06,
+        stopAt: 0.07,
+      });
+    } else if (isTransition) {
+      this.scheduleTone(time, {
+        type: "sine",
+        frequency: 860,
+        gain: 0.2,
+        duration: 0.04,
+        stopAt: 0.05,
+      });
+    }
+
+    this.cycleBeat = (this.cycleBeat + 1) % cycleLength;
+  }
+
+  private scheduleTone(
+    time: number,
+    opts: {
+      type: OscillatorType;
+      frequency: number;
+      gain: number;
+      duration: number;
+      stopAt: number;
+    }
+  ) {
+    if (!this.ctx) return;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
-    osc.type = "square";
-    osc.frequency.setValueAtTime(1000, time);
+    osc.type = opts.type;
+    osc.frequency.setValueAtTime(opts.frequency, time);
     gain.gain.setValueAtTime(0, time);
-    gain.gain.linearRampToValueAtTime(0.18, time + 0.001);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
+    gain.gain.linearRampToValueAtTime(opts.gain, time + 0.001);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + opts.duration);
     osc.connect(gain);
     gain.connect(this.ctx.destination);
     osc.start(time);
-    osc.stop(time + 0.06);
+    osc.stop(time + opts.stopAt);
   }
 }

@@ -14,6 +14,7 @@ interface Props {
 export function MetronomePanel({ defaultBpm = 60, compact = false }: Props) {
   const metronomeRef = useRef<Metronome | null>(null);
   const [bpm, setBpm] = useState(defaultBpm);
+  const [mode, setMode] = useState<"beat" | "tour-tempo">("tour-tempo");
   const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
@@ -24,6 +25,10 @@ export function MetronomePanel({ defaultBpm = 60, compact = false }: Props) {
     };
   }, [defaultBpm]);
 
+  useEffect(() => {
+    metronomeRef.current?.setMode(mode);
+  }, [mode]);
+
   function toggle() {
     const m = metronomeRef.current;
     if (!m) return;
@@ -32,6 +37,7 @@ export function MetronomePanel({ defaultBpm = 60, compact = false }: Props) {
       setPlaying(false);
     } else {
       m.setBPM(bpm);
+      m.setMode(mode);
       m.start();
       setPlaying(true);
     }
@@ -44,41 +50,70 @@ export function MetronomePanel({ defaultBpm = 60, compact = false }: Props) {
   }
 
   return (
-    <div className={`rounded-2xl border bg-card ${compact ? "px-3 py-2" : "px-4 py-3"} flex items-center gap-3`}>
-      <Button
-        onClick={toggle}
-        size={compact ? "sm" : "default"}
-        variant={playing ? "default" : "outline"}
-        className="shrink-0"
-        aria-label={playing ? "Stop metronome" : "Start metronome"}
-      >
-        {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-      </Button>
-
-      <button
-        type="button"
-        onClick={() => adjustBpm(-2)}
-        className="w-8 h-8 rounded-lg border bg-background hover:bg-muted flex items-center justify-center shrink-0"
-        aria-label="Decrease BPM"
-      >
-        <Minus className="h-3.5 w-3.5" />
-      </button>
-
-      <div className="flex-1 text-center">
-        <div className={`tabular-nums font-bold ${compact ? "text-lg" : "text-2xl"} leading-none`}>
-          {bpm}
-        </div>
-        <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-0.5">BPM</div>
+    <div className={`rounded-2xl border bg-card ${compact ? "px-3 py-2" : "px-4 py-3"} space-y-2`}>
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => setMode("tour-tempo")}
+          className={`min-h-[38px] rounded-lg border text-xs font-semibold ${
+            mode === "tour-tempo"
+              ? "border-primary bg-primary/10 text-primary"
+              : "bg-background hover:bg-muted"
+          }`}
+          aria-label="Use Tour Tempo style mode"
+        >
+          Tour Tempo 3:1
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode("beat")}
+          className={`min-h-[38px] rounded-lg border text-xs font-semibold ${
+            mode === "beat"
+              ? "border-primary bg-primary/10 text-primary"
+              : "bg-background hover:bg-muted"
+          }`}
+          aria-label="Use regular beat mode"
+        >
+          Beat
+        </button>
       </div>
 
-      <button
-        type="button"
-        onClick={() => adjustBpm(2)}
-        className="w-8 h-8 rounded-lg border bg-background hover:bg-muted flex items-center justify-center shrink-0"
-        aria-label="Increase BPM"
-      >
-        <Plus className="h-3.5 w-3.5" />
-      </button>
+      <div className="flex items-center gap-3">
+        <Button
+          onClick={toggle}
+          size={compact ? "sm" : "default"}
+          variant={playing ? "default" : "outline"}
+          className="shrink-0"
+          aria-label={playing ? "Stop metronome" : "Start metronome"}
+        >
+          {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+        </Button>
+
+        <button
+          type="button"
+          onClick={() => adjustBpm(-2)}
+          className="w-8 h-8 rounded-lg border bg-background hover:bg-muted flex items-center justify-center shrink-0"
+          aria-label="Decrease BPM"
+        >
+          <Minus className="h-3.5 w-3.5" />
+        </button>
+
+        <div className="flex-1 text-center">
+          <div className={`tabular-nums font-bold ${compact ? "text-lg" : "text-2xl"} leading-none`}>
+            {bpm}
+          </div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-0.5">BPM</div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => adjustBpm(2)}
+          className="w-8 h-8 rounded-lg border bg-background hover:bg-muted flex items-center justify-center shrink-0"
+          aria-label="Increase BPM"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      </div>
     </div>
   );
 }
