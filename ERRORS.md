@@ -83,3 +83,9 @@ Invalid project directory provided, no such directory: /home/runner/work/Golf-Pr
 **Root cause:** The project is on Next.js 16 where invoking `next lint` via this script path currently resolves incorrectly in this environment.  
 **Workaround used in this session:** Relied on `npm run typecheck` and `npm run build` for validation while recording lint failure as pre-existing tooling/config behavior.  
 **Lesson:** Keep lint command compatibility aligned with the current Next.js major version before depending on it as a required validation gate.
+
+### Tour Tempo sounded "dead" at low BPM in testing flow
+**Bug:** Users reported no audible metronome in Driver Program testing/practice tools even though the metronome was wired correctly.  
+**Root cause:** Tour Tempo mode intentionally emitted sounds only on beats 1 and 4; at low BPM this created long silent spans that felt like no output.  
+**Fix:** Added quiet guide clicks on intermediate beats while keeping accents on beats 1 and 4.  
+**Lesson:** For tempo tools used on mobile and outdoors, sparse cadence cues can be misread as failure; keep at least a subtle continuous timing signal.
