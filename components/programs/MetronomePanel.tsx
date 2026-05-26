@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Metronome } from "@/lib/programs/metronome";
+import { Metronome, type TourTempoPreset } from "@/lib/programs/metronome";
 import { Button } from "@/components/ui/button";
 import { Play, Pause, Minus, Plus } from "lucide-react";
 
@@ -12,6 +12,8 @@ interface Props {
   compact?: boolean;
 }
 
+const TOUR_TEMPO_PRESETS: TourTempoPreset[] = ["18/6", "21/7", "24/8", "27/9", "30/10"];
+
 export function MetronomePanel({
   defaultBpm = 60,
   defaultMode = "beat",
@@ -20,6 +22,7 @@ export function MetronomePanel({
   const metronomeRef = useRef<Metronome | null>(null);
   const [bpm, setBpm] = useState(defaultBpm);
   const [mode, setMode] = useState<"beat" | "tour-tempo">(defaultMode);
+  const [tourTempoPreset, setTourTempoPreset] = useState<TourTempoPreset>("24/8");
   const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
@@ -34,6 +37,10 @@ export function MetronomePanel({
     metronomeRef.current?.setMode(mode);
   }, [mode]);
 
+  useEffect(() => {
+    metronomeRef.current?.setTourTempoPreset(tourTempoPreset);
+  }, [tourTempoPreset]);
+
   function toggle() {
     const m = metronomeRef.current;
     if (!m) return;
@@ -42,6 +49,7 @@ export function MetronomePanel({
       setPlaying(false);
     } else {
       m.setBPM(bpm);
+      m.setTourTempoPreset(tourTempoPreset);
       m.start();
       setPlaying(true);
     }
@@ -86,6 +94,33 @@ export function MetronomePanel({
         </button>
       </div>
 
+      {mode === "tour-tempo" && (
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">
+            Tour Tempo setting
+          </div>
+          <div className="grid grid-cols-5 gap-1.5" role="radiogroup" aria-label="Tour Tempo setting">
+            {TOUR_TEMPO_PRESETS.map(preset => (
+              <button
+                key={preset}
+                type="button"
+                role="radio"
+                aria-checked={tourTempoPreset === preset}
+                onClick={() => setTourTempoPreset(preset)}
+                className={`min-h-[36px] rounded-md border text-[11px] font-semibold ${
+                  tourTempoPreset === preset
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "bg-background hover:bg-muted"
+                }`}
+                aria-label={`Set Tour Tempo to ${preset}`}
+              >
+                {preset}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center gap-3">
         <Button
           onClick={toggle}
@@ -97,30 +132,36 @@ export function MetronomePanel({
           {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
         </Button>
 
-        <button
-          type="button"
-          onClick={() => adjustBpm(-2)}
-          className="w-8 h-8 rounded-lg border bg-background hover:bg-muted flex items-center justify-center shrink-0"
-          aria-label="Decrease BPM"
-        >
-          <Minus className="h-3.5 w-3.5" />
-        </button>
+        {mode === "beat" ? (
+          <>
+            <button
+              type="button"
+              onClick={() => adjustBpm(-2)}
+              className="w-8 h-8 rounded-lg border bg-background hover:bg-muted flex items-center justify-center shrink-0"
+              aria-label="Decrease BPM"
+            >
+              <Minus className="h-3.5 w-3.5" />
+            </button>
 
-        <div className="flex-1 text-center">
-          <div className={`tabular-nums font-bold ${compact ? "text-lg" : "text-2xl"} leading-none`}>
-            {bpm}
-          </div>
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-0.5">BPM</div>
-        </div>
+            <div className="flex-1 text-center">
+              <div className={`tabular-nums font-bold ${compact ? "text-lg" : "text-2xl"} leading-none`}>
+                {bpm}
+              </div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-0.5">BPM</div>
+            </div>
 
-        <button
-          type="button"
-          onClick={() => adjustBpm(2)}
-          className="w-8 h-8 rounded-lg border bg-background hover:bg-muted flex items-center justify-center shrink-0"
-          aria-label="Increase BPM"
-        >
-          <Plus className="h-3.5 w-3.5" />
-        </button>
+            <button
+              type="button"
+              onClick={() => adjustBpm(2)}
+              className="w-8 h-8 rounded-lg border bg-background hover:bg-muted flex items-center justify-center shrink-0"
+              aria-label="Increase BPM"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+          </>
+        ) : (
+          <div className="text-sm text-muted-foreground">3 tones + pause loop</div>
+        )}
       </div>
     </div>
   );
