@@ -88,10 +88,10 @@ Updated at the end of every session.
 ## Session — 2026-05-26
 
 ### Program metronome now supports Tour Tempo-style cadence
-**Decision:** Extended `Metronome` with two modes: `beat` (classic click every beat) and `tour-tempo` (4-beat cycle with audible tones on beat 1 and beat 4 for a 3:1 backswing:downswing feel). Added a mode toggle in `MetronomePanel` and set program compile blocks to default to `tour-tempo` explicitly.  
+**Decision:** Extended `Metronome` with two modes: `beat` (classic click every beat) and `tour-tempo` (4-step cycle with three audible tones then one silent pause). Added a mode toggle in `MetronomePanel` and set program compile blocks to default to `tour-tempo` explicitly.  
 **Why:** The driver program drills repeatedly reference tempo work and the user asked for Tour Tempo-like behavior. Keeping both modes preserves backward compatibility while enabling the 3:1 training cadence where needed.  
 **Also added:** Radio semantics (`radiogroup`, `role="radio"`, `aria-checked`) for metronome mode controls to improve accessibility on mobile.
 
-### Tour Tempo mode now keeps quiet guide clicks between accents
-**Decision:** Updated `Metronome.scheduleTourTempoTick` to keep low-volume guide clicks on the two intermediate beats while preserving accented cues for beat 1 (backswing start) and beat 4 (transition).  
-**Why:** At lower BPM values used in driver phases (e.g. 50 BPM), long silent gaps made users think the metronome from testing/practice tools was broken. Guide clicks preserve Tour Tempo feel but make timing continuously audible.
+### Tour Tempo mode now uses a three-tone descending loop + pause
+**Decision:** Updated `Metronome.scheduleTourTempoTick` to play a three-tone descending sequence (triangle 1480Hz, square 1140Hz, sine 860Hz) followed by a silent beat pause.  
+**Why:** At lower tempos in testing/practice flow, sparse cues felt broken. The 3-tone + pause loop keeps Tour Tempo feel while remaining clearly audible.

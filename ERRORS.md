@@ -87,5 +87,5 @@ Invalid project directory provided, no such directory: /home/runner/work/Golf-Pr
 ### Tour Tempo sounded "dead" at low BPM in testing flow
 **Bug:** Users reported no audible metronome in Driver Program testing/practice tools even though the metronome was wired correctly.  
 **Root cause:** Tour Tempo mode intentionally emitted sounds only on beats 1 and 4; at low BPM this created long silent spans that felt like no output.  
-**Fix:** Added quiet guide clicks on intermediate beats while keeping accents on beats 1 and 4.  
-**Lesson:** For tempo tools used on mobile and outdoors, sparse cadence cues can be misread as failure; keep at least a subtle continuous timing signal.
+**Fix:** Switched to a clear three-tone descending sequence on beats 1–3 followed by a deliberate pause beat, and added explicit Tour Tempo preset settings (`18/6`, `21/7`, `24/8`, `27/9`, `30/10`).  
+**Lesson:** For tempo tools used on mobile and outdoors, explicit rhythmic phrasing (tone-tone-tone-pause) is clearer than sparse accent-only cues.
