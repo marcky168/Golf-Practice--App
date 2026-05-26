@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Target, RotateCcw, Save, Loader2 } from "lucide-react";
+import { ArrowLeft, Target, RotateCcw, Save } from "lucide-react";
 import { toast } from "sonner";
 import { calculateLandingZoneScore } from "@/lib/practice/games";
 import { getClubBag, type ClubEntry } from "@/app/actions";
@@ -14,7 +14,9 @@ import { markUserHasPracticed } from "@/lib/markHasPracticed";
 import { RestBetweenShots, RestIntervalSelector } from "@/components/practice/RestBetweenShots";
 import { IntentionPicker, type ShapeType, type TrajectoryType } from "@/components/practice/IntentionPicker";
 import { GameScoreCompare } from "@/components/practice/GameScoreCompare";
+import { ShortGameClubPicker } from "@/components/practice/ShortGameClubPicker";
 import { useGamePersonalBest } from "@/components/practice/useGamePersonalBest";
+import { isWedgeClub } from "@/lib/practice/short-game-clubs";
 
 type ShotScore = 5 | 4 | 3 | 1 | 0;
 
@@ -36,14 +38,10 @@ const scoreLabels: Record<ShotScore, { label: string; detail: string }> = {
 };
 
 function isWedgeOrShort(entry: ClubEntry): boolean {
-  const n = entry.club.toLowerCase();
-  if (n.includes("°") || n.includes("wedge")) return true;
-  if (n.includes("pw") || n.includes("pitch") || n.includes("gap") || n.includes("sand") || n.includes("lob")) return true;
-  return entry.carry > 0 && entry.carry <= 130;
+  return isWedgeClub(entry);
 }
 
 export default function LandingZone8Game() {
-  const { personalBest, noteSavedScore, personalBestReady } = useGamePersonalBest("landing-zone-8");
   const [hasStarted, setHasStarted] = useState(false);
   const sessionStartedAtRef = useSessionStartedAt(hasStarted);
   const [bagLoading, setBagLoading] = useState(true);
@@ -61,6 +59,7 @@ export default function LandingZone8Game() {
 
   const wedgeBag = clubBag.filter(isWedgeOrShort);
   const effectiveClub = (selectedClub?.club ?? customClub) || "Wedge";
+  const { personalBest, noteSavedScore, personalBestReady } = useGamePersonalBest("landing-zone-8", effectiveClub);
   const effectiveLanding = useCustomLanding ? (customLanding || "Custom spot") : landingSpot;
   const intentionSet = sessionShape !== null && sessionTrajectory !== null;
   const isComplete = scores.length === 8;
@@ -130,34 +129,18 @@ export default function LandingZone8Game() {
         </p>
 
         <div className="space-y-6">
-          <div>
-            <div className="text-sm font-semibold mb-2">Wedge</div>
-            {bagLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-            ) : wedgeBag.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {wedgeBag.map((entry) => (
-                  <button
-                    key={entry.club}
-                    type="button"
-                    onClick={() => { setSelectedClub(entry); setCustomClub(""); }}
-                    className={`px-4 py-2 rounded-full border text-sm font-medium ${
-                      selectedClub?.club === entry.club ? "bg-primary text-primary-foreground" : "bg-card"
-                    }`}
-                  >
-                    {entry.club}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <input
-                value={customClub}
-                onChange={(e) => setCustomClub(e.target.value)}
-                className="w-full rounded-xl border bg-card px-4 py-3"
-                placeholder="56°, PW…"
-              />
-            )}
-          </div>
+          <ShortGameClubPicker
+            label="Wedge"
+            bagLoading={bagLoading}
+            clubs={wedgeBag}
+            selectedClub={selectedClub}
+            customClub={customClub}
+            onSelectClub={(entry) => { setSelectedClub(entry); setCustomClub(""); }}
+            onCustomClub={(value) => { setCustomClub(value); setSelectedClub(null); }}
+            gameId="landing-zone-8"
+            personalBest={personalBest}
+            personalBestReady={personalBestReady}
+          />
 
           <div>
             <div className="text-sm font-semibold mb-2">Landing spot</div>
@@ -285,7 +268,13 @@ export default function LandingZone8Game() {
         <p className="text-sm text-muted-foreground mt-2 px-4">{effectiveLanding}</p>
       </div>
 
-      <GameScoreCompare gameId="landing-zone-8" score={result.total} personalBest={personalBest} personalBestReady={personalBestReady} />
+      <GameScoreCompare
+        gameId="landing-zone-8"
+        score={result.total}
+        personalBest={personalBest}
+        personalBestReady={personalBestReady}
+        clubLabel={effectiveClub}
+      />
 
       <div className="flex gap-3 mb-3">
         <Button onClick={resetGame} variant="outline" size="lg" className="flex-1">

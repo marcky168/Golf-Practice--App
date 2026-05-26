@@ -45,6 +45,7 @@ export function GameScoreCompare({
   score,
   personalBest,
   personalBestReady = true,
+  clubLabel,
 }: {
   gameId: string;
   score: number;
@@ -52,6 +53,8 @@ export function GameScoreCompare({
   personalBest?: number;
   /** Wait for history load before locking beat/tie/miss */
   personalBestReady?: boolean;
+  /** When PB is tracked per club, e.g. "56°" */
+  clubLabel?: string;
 }) {
   const [frozen, setFrozen] = useState<FrozenCompare | null>(null);
 
@@ -85,7 +88,7 @@ export function GameScoreCompare({
         </div>
         <div className="text-right">
           <div className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-0.5">
-            Personal best
+            Personal best{clubLabel ? ` · ${clubLabel}` : ""}
           </div>
           <div className="text-xl font-semibold tabular-nums leading-tight">
             {personalBest !== undefined ? formatGameScore(gameId, personalBest) : "—"}

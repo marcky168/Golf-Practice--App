@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Target, RotateCcw, Save } from "lucide-react";
@@ -11,7 +11,10 @@ import { useSessionStartedAt } from "@/lib/practice/use-session-started-at";
 import { IntentionPicker, type ShapeType, type TrajectoryType } from "@/components/practice/IntentionPicker";
 import { RestBetweenShots, RestIntervalSelector } from "@/components/practice/RestBetweenShots";
 import { GameScoreCompare } from "@/components/practice/GameScoreCompare";
+import { ShortGameClubPicker } from "@/components/practice/ShortGameClubPicker";
 import { useGamePersonalBest } from "@/components/practice/useGamePersonalBest";
+import { getClubBag, type ClubEntry } from "@/app/actions";
+import { isWedgeClub } from "@/lib/practice/short-game-clubs";
 
 const lies = [
   "Tight lie, 15 yards",
@@ -30,9 +33,12 @@ type UpDownResult = {
 };
 
 export default function UpAndDownScramble() {
-  const { personalBest, noteSavedScore, personalBestReady } = useGamePersonalBest("up-and-down");
   const [phase, setPhase] = useState<"setup" | "playing">("setup");
   const sessionStartedAtRef = useSessionStartedAt(phase === "playing");
+  const [bagLoading, setBagLoading] = useState(true);
+  const [clubBag, setClubBag] = useState<ClubEntry[]>([]);
+  const [selectedClub, setSelectedClub] = useState<ClubEntry | null>(null);
+  const [customClub, setCustomClub] = useState("");
   const [results, setResults] = useState<UpDownResult[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
@@ -41,10 +47,23 @@ export default function UpAndDownScramble() {
   const [restInterval, setRestInterval] = useState(0);
   const [isResting, setIsResting] = useState(false);
 
+  const wedgeBag = clubBag.filter(isWedgeClub);
+  const effectiveClub = (selectedClub?.club ?? customClub) || "Wedge";
+  const { personalBest, noteSavedScore, personalBestReady } = useGamePersonalBest("up-and-down", effectiveClub);
+
   const currentLie = lies[currentIndex];
   const isBunker = currentLie.toLowerCase().includes("bunker");
   const intentionReady = isBunker || (pendingShape !== null && pendingTrajectory !== null);
   const progress = (results.length / 6) * 100;
+
+  useEffect(() => {
+    getClubBag().then((bag) => {
+      setClubBag(bag);
+      const wedges = bag.filter(isWedgeClub);
+      if (wedges.length > 0) setSelectedClub(wedges[0]);
+      setBagLoading(false);
+    });
+  }, []);
 
   function recordResult(success: boolean) {
     if (!intentionReady) return;
@@ -80,9 +99,9 @@ export default function UpAndDownScramble() {
     const timing = buildSessionTiming(sessionStartedAtRef.current ?? Date.now());
     const res = await saveGameSession({
       type: "game",
-      title: "Up & Down Scramble",
+      title: `Up & Down Scramble — ${effectiveClub}`,
       ...timing,
-      config: { gameId: "up-and-down", results },
+      config: { gameId: "up-and-down", club: effectiveClub, results },
       score: made,
     }, noteSavedScore);
     if (res.success) toast.success("Saved!");
@@ -103,8 +122,24 @@ export default function UpAndDownScramble() {
         </div>
         <p className="text-muted-foreground mb-8">6 realistic lies. Chip or pitch + one putt. Goal: get up and down every time.</p>
         <div className="space-y-6">
+          <ShortGameClubPicker
+            bagLoading={bagLoading}
+            clubs={wedgeBag}
+            selectedClub={selectedClub}
+            customClub={customClub}
+            onSelectClub={(entry) => { setSelectedClub(entry); setCustomClub(""); }}
+            onCustomClub={(value) => { setCustomClub(value); setSelectedClub(null); }}
+            gameId="up-and-down"
+            personalBest={personalBest}
+            personalBestReady={personalBestReady}
+          />
           <RestIntervalSelector value={restInterval} onChange={setRestInterval} />
-          <Button size="lg" className="w-full h-14 text-lg" onClick={() => setPhase("playing")}>
+          <Button
+            size="lg"
+            className="w-full h-14 text-lg"
+            disabled={!(selectedClub || customClub)}
+            onClick={() => setPhase("playing")}
+          >
             Start Challenge
           </Button>
         </div>
@@ -124,7 +159,7 @@ export default function UpAndDownScramble() {
         <Target className="h-8 w-8 text-accent" />
         <h1 className="text-3xl font-semibold tracking-tighter">Up &amp; Down Scramble</h1>
       </div>
-      <p className="text-muted-foreground mb-6">6 realistic lies. Chip or pitch + one putt. Goal: get up and down every time.</p>
+      <p className="text-muted-foreground mb-6">6 realistic lies with {effectiveClub}. Chip or pitch + one putt.</p>
 
       {/* Progress */}
       <div className="mb-6">
@@ -193,7 +228,13 @@ export default function UpAndDownScramble() {
             <div className="text-xl mt-1">up and downs made</div>
           </div>
 
-          <GameScoreCompare gameId="up-and-down" score={madeCount} personalBest={personalBest} personalBestReady={personalBestReady} />
+          <GameScoreCompare
+            gameId="up-and-down"
+            score={madeCount}
+            personalBest={personalBest}
+            personalBestReady={personalBestReady}
+            clubLabel={effectiveClub}
+          />
 
           <div className="bg-card border rounded-2xl p-5 text-sm">
             {results.map((r, i) => (

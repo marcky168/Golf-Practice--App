@@ -1,3 +1,18 @@
+/** Games where personal best is tracked per club (stored in session config.club). */
+export const CLUB_SCOPED_GAME_IDS = [
+  "chip-ladder",
+  "landing-zone-8",
+  "bump-and-run-blitz",
+  "up-and-down",
+] as const;
+
+export type ClubScopedGameId = (typeof CLUB_SCOPED_GAME_IDS)[number];
+
+/** Normalize club names for consistent PB lookup ("56°" vs "56 °"). */
+export function normalizeClubKey(club: string): string {
+  return club.trim().toLowerCase();
+}
+
 /** Format a raw game score for display (matches Games hub labels). */
 export function formatGameScore(gameId: string, score: number): string {
   switch (gameId) {
@@ -66,4 +81,30 @@ export function personalBestFromSessions(
 export function mergePersonalBest(current: number | undefined, savedScore: number): number {
   if (current === undefined) return savedScore;
   return Math.max(current, savedScore);
+}
+
+/** Best score per club from saved game sessions (requires config.club). */
+export function personalBestByClubFromSessions(
+  sessions: Array<{ type: string; score?: number | null; config: unknown }>,
+  gameId: string
+): Record<string, number> {
+  const best: Record<string, number> = {};
+  for (const s of sessions) {
+    if (s.type !== "game" || s.score == null) continue;
+    const cfg = s.config as { gameId?: string; club?: string } | null;
+    if (cfg?.gameId !== gameId) continue;
+    const club = cfg.club?.trim();
+    if (!club) continue;
+    const key = normalizeClubKey(club);
+    if (best[key] === undefined || s.score > best[key]) best[key] = s.score;
+  }
+  return best;
+}
+
+export function personalBestForClub(
+  bestByClub: Record<string, number>,
+  club: string | null | undefined
+): number | undefined {
+  if (!club?.trim()) return undefined;
+  return bestByClub[normalizeClubKey(club)];
 }

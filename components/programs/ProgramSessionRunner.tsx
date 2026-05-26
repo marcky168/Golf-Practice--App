@@ -16,6 +16,12 @@ interface Props {
   program: Program;
   phase: ProgramPhase;
   sessionInPhase: number;
+  /** URL ?step= — jump into a section for testing */
+  initialStep?: ProgramSessionStep;
+  /** Show step picker in header when practicing / testing */
+  allowStepPicker?: boolean;
+  /** True when session started via ?phase= override (practice, not auto-advance) */
+  practiceMode?: boolean;
 }
 
 // ── Countdown timer hook ──────────────────────────────────────────────────────
@@ -53,10 +59,20 @@ function fmtTime(s: number): string {
 }
 
 // ── Main runner ───────────────────────────────────────────────────────────────
-export function ProgramSessionRunner({ program, phase, sessionInPhase }: Props) {
+export function ProgramSessionRunner({
+  program,
+  phase,
+  sessionInPhase,
+  initialStep,
+  allowStepPicker = false,
+  practiceMode = false,
+}: Props) {
   const router = useRouter();
-  const [step, setStep] = useState<ProgramSessionStep>("intro");
+  const [step, setStep] = useState<ProgramSessionStep>(initialStep ?? "intro");
   const sessionStartRef = useRef<number>(Date.now());
+  const shellNav = allowStepPicker
+    ? { allowStepPicker: true as const, onStepChange: setStep }
+    : {};
 
   // Tracking sheet state
   const [goodShots, setGoodShots]   = useState(0);
@@ -135,7 +151,12 @@ export function ProgramSessionRunner({ program, phase, sessionInPhase }: Props) 
   // ── INTRO ──────────────────────────────────────────────────────────────────
   if (step === "intro") {
     return (
-      <PageShell program={program} phase={phase} step={step}>
+      <PageShell program={program} phase={phase} step={step} {...shellNav}>
+        {practiceMode && (
+          <div className="rounded-xl border border-amber-400/50 bg-amber-50/50 dark:bg-amber-950/25 px-3 py-2 text-xs text-amber-900 dark:text-amber-200 mb-4">
+            Practice mode — this session won&apos;t change your phase until you save with real tracking.
+          </div>
+        )}
         <h2 className="text-2xl font-semibold tracking-tight mb-2">Before you start</h2>
         <p className="text-sm text-muted-foreground mb-5">
           Read the cue card. Close your eyes. Visualise 5 perfect reps. Two minutes.
@@ -187,7 +208,7 @@ export function ProgramSessionRunner({ program, phase, sessionInPhase }: Props) 
   // ── WARMUP ─────────────────────────────────────────────────────────────────
   if (step === "warmup") {
     return (
-      <PageShell program={program} phase={phase} step={step}>
+      <PageShell program={program} phase={phase} step={step} {...shellNav}>
         <h2 className="text-2xl font-semibold tracking-tight mb-1">Warm-up</h2>
         <p className="text-sm text-muted-foreground mb-5">
           {program.warmup.totalDuration}. Mobility → movement prep → dynamic swings.
@@ -242,13 +263,14 @@ export function ProgramSessionRunner({ program, phase, sessionInPhase }: Props) 
         blockDuration="20 min"
         onContinue={() => advance("micro-rest")}
         continueLabel="Done — micro-rest"
+        {...shellNav}
       />
     );
   }
 
   // ── MICRO-REST ─────────────────────────────────────────────────────────────
   if (step === "micro-rest") {
-    return <MicroRest onContinue={() => advance("compile-2")} program={program} phase={phase} />;
+    return <MicroRest onContinue={() => advance("compile-2")} program={program} phase={phase} {...shellNav} />;
   }
 
   // ── COMPILE BLOCK 2 ────────────────────────────────────────────────────────
@@ -261,6 +283,7 @@ export function ProgramSessionRunner({ program, phase, sessionInPhase }: Props) 
         blockDuration="15–20 min"
         onContinue={() => advance("consolidate")}
         continueLabel="Done — start idle rest"
+        {...shellNav}
       />
     );
   }
@@ -274,6 +297,7 @@ export function ProgramSessionRunner({ program, phase, sessionInPhase }: Props) 
         onSkip={() => advance("recap")}
         program={program}
         phase={phase}
+        {...shellNav}
       />
     );
   }
@@ -281,7 +305,7 @@ export function ProgramSessionRunner({ program, phase, sessionInPhase }: Props) 
   // ── VERBAL RECAP ───────────────────────────────────────────────────────────
   if (step === "recap") {
     return (
-      <PageShell program={program} phase={phase} step={step}>
+      <PageShell program={program} phase={phase} step={step} {...shellNav}>
         <h2 className="text-2xl font-semibold tracking-tight mb-1">Verbal recap</h2>
         <p className="text-sm text-muted-foreground mb-5">
           Say it out loud. Verbalising exposes gaps that thinking doesn't.
@@ -338,7 +362,7 @@ export function ProgramSessionRunner({ program, phase, sessionInPhase }: Props) 
     const meetsGate = totalShots > 0 && goodPct >= gateRequired;
 
     return (
-      <PageShell program={program} phase={phase} step={step}>
+      <PageShell program={program} phase={phase} step={step} {...shellNav}>
         <h2 className="text-2xl font-semibold tracking-tight mb-1">Tracking sheet</h2>
         <p className="text-sm text-muted-foreground mb-5">
           The numbers go on the wall. Honest scoring only.
@@ -444,16 +468,43 @@ export function ProgramSessionRunner({ program, phase, sessionInPhase }: Props) 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function PageShell({
-  program, phase, step, children,
+  program,
+  phase,
+  step,
+  children,
+  allowStepPicker,
+  onStepChange,
 }: {
   program: Program;
   phase: ProgramPhase;
   step: ProgramSessionStep;
   children: React.ReactNode;
+  allowStepPicker?: boolean;
+  onStepChange?: (step: ProgramSessionStep) => void;
 }) {
-  const stepOrder: ProgramSessionStep[] = ["intro", "warmup", "compile-1", "micro-rest", "compile-2", "consolidate", "recap", "tracking"];
+  const stepOrder: ProgramSessionStep[] = [
+    "intro",
+    "warmup",
+    "compile-1",
+    "micro-rest",
+    "compile-2",
+    "consolidate",
+    "recap",
+    "tracking",
+  ];
   const stepIdx = stepOrder.indexOf(step);
   const progressPct = Math.round(((stepIdx + 1) / stepOrder.length) * 100);
+
+  const stepLabels: Record<ProgramSessionStep, string> = {
+    intro: "Intro",
+    warmup: "Warm-up",
+    "compile-1": "Compile 1",
+    "micro-rest": "Micro-rest",
+    "compile-2": "Compile 2",
+    consolidate: "Rest",
+    recap: "Recap",
+    tracking: "Save",
+  };
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -469,6 +520,24 @@ function PageShell({
             <X className="h-3.5 w-3.5" /> Exit
           </Link>
         </div>
+        {allowStepPicker && onStepChange && (
+          <div className="max-w-xl mx-auto px-4 pb-2">
+            <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+              Jump to step
+            </label>
+            <select
+              value={step}
+              onChange={e => onStepChange(e.target.value as ProgramSessionStep)}
+              className="mt-1 w-full min-h-[44px] rounded-xl border bg-card px-3 text-sm"
+            >
+              {stepOrder.map(s => (
+                <option key={s} value={s}>
+                  {stepLabels[s]}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="h-0.5 bg-muted">
           <div className="h-full bg-primary transition-all duration-300" style={{ width: `${progressPct}%` }} />
         </div>
@@ -496,7 +565,14 @@ function CheckRow({ label, checked }: { label: string; checked: boolean }) {
 
 // Single compile block — drill list + metronome + shot counter notes
 function CompileBlock({
-  program, phase, blockNumber, blockDuration, onContinue, continueLabel,
+  program,
+  phase,
+  blockNumber,
+  blockDuration,
+  onContinue,
+  continueLabel,
+  allowStepPicker,
+  onStepChange,
 }: {
   program: Program;
   phase: ProgramPhase;
@@ -504,13 +580,21 @@ function CompileBlock({
   blockDuration: string;
   onContinue: () => void;
   continueLabel: string;
+  allowStepPicker?: boolean;
+  onStepChange?: (step: ProgramSessionStep) => void;
 }) {
   // For block 2, surface deliberate-error drills more prominently
   const drills = phase.compileDrills;
   const metronomeDrill = drills.find(d => d.metronomeBPM);
 
   return (
-    <PageShell program={program} phase={phase} step={blockNumber === 1 ? "compile-1" : "compile-2"}>
+    <PageShell
+      program={program}
+      phase={phase}
+      step={blockNumber === 1 ? "compile-1" : "compile-2"}
+      allowStepPicker={allowStepPicker}
+      onStepChange={onStepChange}
+    >
       <div className="flex items-center justify-between mb-2">
         <h2 className="text-2xl font-semibold tracking-tight">Compile Block {blockNumber}</h2>
         <div className="text-xs text-muted-foreground flex items-center gap-1">
@@ -588,17 +672,23 @@ function CompileBlock({
 }
 
 function MicroRest({
-  onContinue, program, phase,
+  onContinue,
+  program,
+  phase,
+  allowStepPicker,
+  onStepChange,
 }: {
   onContinue: () => void;
   program: Program;
   phase: ProgramPhase;
+  allowStepPicker?: boolean;
+  onStepChange?: (step: ProgramSessionStep) => void;
 }) {
   const secondsLeft = useCountdown(180, true, () => {});
   const done = secondsLeft === 0;
 
   return (
-    <PageShell program={program} phase={phase} step="micro-rest">
+    <PageShell program={program} phase={phase} step="micro-rest" allowStepPicker={allowStepPicker} onStepChange={onStepChange}>
       <div className="flex flex-col items-center text-center mt-8">
         <Brain className="h-12 w-12 text-blue-500 mb-4 animate-pulse" />
         <h2 className="text-2xl font-semibold tracking-tight mb-2">Micro-rest</h2>
@@ -631,19 +721,27 @@ function MicroRest({
 }
 
 function Consolidate({
-  minutes, onDone, onSkip, program, phase,
+  minutes,
+  onDone,
+  onSkip,
+  program,
+  phase,
+  allowStepPicker,
+  onStepChange,
 }: {
   minutes: number;
   onDone: () => void;
   onSkip: () => void;
   program: Program;
   phase: ProgramPhase;
+  allowStepPicker?: boolean;
+  onStepChange?: (step: ProgramSessionStep) => void;
 }) {
   const secondsLeft = useCountdown(minutes * 60, true);
   const done = secondsLeft === 0;
 
   return (
-    <PageShell program={program} phase={phase} step="consolidate">
+    <PageShell program={program} phase={phase} step="consolidate" allowStepPicker={allowStepPicker} onStepChange={onStepChange}>
       <div className="flex flex-col items-center text-center mt-6">
         <div className="w-16 h-16 rounded-full bg-violet-500/15 flex items-center justify-center mb-4">
           <Brain className="h-8 w-8 text-violet-500" />

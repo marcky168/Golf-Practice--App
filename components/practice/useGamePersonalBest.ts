@@ -2,19 +2,35 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getUserSessions } from "@/app/actions";
-import { mergePersonalBest, personalBestFromSessions } from "@/lib/practice/game-scores";
+import {
+  mergePersonalBest,
+  normalizeClubKey,
+  personalBestByClubFromSessions,
+  personalBestForClub,
+  personalBestFromSessions,
+} from "@/lib/practice/game-scores";
 
-/** Loads PB from history and keeps it updated after saves on the same page. */
-export function useGamePersonalBest(gameId: string) {
-  const [personalBest, setPersonalBest] = useState<number | undefined>(undefined);
+/**
+ * Loads personal best for a game.
+ * Pass `club` for club-scoped games (chip ladder, landing zone, etc.).
+ */
+export function useGamePersonalBest(gameId: string, club?: string | null) {
+  const [bestByClub, setBestByClub] = useState<Record<string, number>>({});
+  const [overallBest, setOverallBest] = useState<number | undefined>(undefined);
   const [personalBestReady, setPersonalBestReady] = useState(false);
+
+  const clubScoped = Boolean(club?.trim());
+
+  const personalBest = clubScoped
+    ? personalBestForClub(bestByClub, club)
+    : overallBest;
 
   const refresh = useCallback(() => {
     return getUserSessions(500).then(sessions => {
-      const pb = personalBestFromSessions(sessions, gameId);
-      setPersonalBest(pb);
+      setBestByClub(personalBestByClubFromSessions(sessions, gameId));
+      setOverallBest(personalBestFromSessions(sessions, gameId));
       setPersonalBestReady(true);
-      return pb;
+      return sessions;
     });
   }, [gameId]);
 
@@ -23,9 +39,17 @@ export function useGamePersonalBest(gameId: string) {
   }, [refresh]);
 
   /** Call after a successful save so Try Again compares against this round. */
-  const noteSavedScore = useCallback((score: number) => {
-    setPersonalBest(prev => mergePersonalBest(prev, score));
+  const noteSavedScore = useCallback((score: number, savedClub?: string) => {
+    setOverallBest(prev => mergePersonalBest(prev, score));
+    const key = savedClub?.trim();
+    if (key) {
+      const norm = normalizeClubKey(key);
+      setBestByClub(prev => ({
+        ...prev,
+        [norm]: mergePersonalBest(prev[norm], score),
+      }));
+    }
   }, []);
 
-  return { personalBest, noteSavedScore, refresh, personalBestReady };
+  return { personalBest, bestByClub, noteSavedScore, refresh, personalBestReady };
 }

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getProgramById } from "@/lib/programs/registry";
 import { computeProgramProgress } from "@/lib/programs/progress";
 import { CueCardDisplay } from "@/components/programs/CueCardDisplay";
+import { ProgramTestingPanel } from "@/components/programs/ProgramTestingPanel";
 import type { SessionConfig } from "@/lib/practice/types";
 
 const PROGRAM_ID = "driver-program";
@@ -34,7 +35,8 @@ export default async function DriverProgramOverviewPage() {
     }
   }
 
-  const progress = computeProgramProgress(program, sessions);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const progress = computeProgramProgress(program, sessions as any[]);
   const currentPhase = program.phases[progress.currentPhaseIndex];
 
   return (
@@ -45,6 +47,8 @@ export default async function DriverProgramOverviewPage() {
 
       <h1 className="text-3xl font-semibold tracking-tighter mb-2">{program.name}</h1>
       <p className="text-muted-foreground mb-6">{program.fullDescription}</p>
+
+      <ProgramTestingPanel program={program} />
 
       {/* Current phase + today's cue card */}
       <div className="rounded-2xl border-2 border-primary/30 bg-primary/5 p-5 mb-6">

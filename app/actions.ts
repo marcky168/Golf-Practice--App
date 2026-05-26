@@ -72,6 +72,11 @@ export async function savePracticeSession(input: SaveSessionInput) {
   revalidatePath("/history");
   revalidatePath("/");
   revalidatePath("/practice/games");
+  if ((input.config as { programId?: string } | null)?.programId) {
+    const pid = (input.config as { programId: string }).programId;
+    revalidatePath("/programs");
+    revalidatePath(`/programs/${pid}`);
+  }
 
   return { success: true };
 }
@@ -95,6 +100,49 @@ export async function updateSessionNotes(sessionId: string, notes: string) {
 
   revalidatePath("/history");
   return { success: true };
+}
+
+/** Remove all saved sessions for a program (resets phase progress). */
+export async function deleteProgramSessions(programId: string) {
+  const supabase = await requireSupabaseClient();
+  if (!supabase) return { error: "Authentication service is not configured." };
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const { data, error: fetchError } = await supabase
+    .from("practice_sessions")
+    .select("id, config")
+    .eq("user_id", user.id)
+    .order("started_at", { ascending: false })
+    .limit(500);
+
+  if (fetchError) return { error: fetchError.message };
+
+  const ids = (data ?? [])
+    .filter(row => (row.config as { programId?: string } | null)?.programId === programId)
+    .map(row => row.id);
+
+  if (ids.length === 0) {
+    revalidatePath("/programs");
+    revalidatePath(`/programs/${programId}`);
+    return { success: true, deleted: 0 };
+  }
+
+  const { error: deleteError } = await supabase
+    .from("practice_sessions")
+    .delete()
+    .in("id", ids)
+    .eq("user_id", user.id);
+
+  if (deleteError) return { error: deleteError.message };
+
+  revalidatePath("/history");
+  revalidatePath("/");
+  revalidatePath("/programs");
+  revalidatePath(`/programs/${programId}`);
+
+  return { success: true, deleted: ids.length };
 }
 
 export async function getUserSessions(limit = 50) {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Target, RotateCcw, Save } from "lucide-react";
@@ -13,7 +13,10 @@ import { markUserHasPracticed } from "@/lib/markHasPracticed";
 import { RestBetweenShots, RestIntervalSelector } from "@/components/practice/RestBetweenShots";
 import { IntentionPicker, type ShapeType, type TrajectoryType } from "@/components/practice/IntentionPicker";
 import { GameScoreCompare } from "@/components/practice/GameScoreCompare";
+import { ShortGameClubPicker } from "@/components/practice/ShortGameClubPicker";
 import { useGamePersonalBest } from "@/components/practice/useGamePersonalBest";
+import { getClubBag, type ClubEntry } from "@/app/actions";
+import { isBumpRunClub } from "@/lib/practice/short-game-clubs";
 
 const LIES = [
   { label: "Fringe bump", detail: "12 yd · low runner off the collar" },
@@ -33,9 +36,12 @@ type LieResult = {
 };
 
 export default function BumpAndRunBlitzGame() {
-  const { personalBest, noteSavedScore, personalBestReady } = useGamePersonalBest("bump-and-run-blitz");
   const [phase, setPhase] = useState<"setup" | "playing">("setup");
   const sessionStartedAtRef = useSessionStartedAt(phase === "playing");
+  const [bagLoading, setBagLoading] = useState(true);
+  const [clubBag, setClubBag] = useState<ClubEntry[]>([]);
+  const [selectedClub, setSelectedClub] = useState<ClubEntry | null>(null);
+  const [customClub, setCustomClub] = useState("");
   const [results, setResults] = useState<LieResult[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [pendingShape, setPendingShape] = useState<ShapeType | null>(null);
@@ -43,10 +49,23 @@ export default function BumpAndRunBlitzGame() {
   const [restInterval, setRestInterval] = useState(0);
   const [isResting, setIsResting] = useState(false);
 
+  const bumpRunBag = clubBag.filter(isBumpRunClub);
+  const effectiveClub = (selectedClub?.club ?? customClub) || "Club";
+  const { personalBest, noteSavedScore, personalBestReady } = useGamePersonalBest("bump-and-run-blitz", effectiveClub);
+
   const currentLie = LIES[currentIndex];
   const intentionReady = pendingShape !== null && pendingTrajectory !== null;
   const isComplete = results.length === LIES.length;
   const progress = (results.length / LIES.length) * 100;
+
+  useEffect(() => {
+    getClubBag().then((bag) => {
+      setClubBag(bag);
+      const options = bag.filter(isBumpRunClub);
+      if (options.length > 0) setSelectedClub(options[0]);
+      setBagLoading(false);
+    });
+  }, []);
 
   function recordResult(inside8ft: boolean) {
     if (!intentionReady) return;
@@ -83,9 +102,9 @@ export default function BumpAndRunBlitzGame() {
     const timing = buildSessionTiming(sessionStartedAtRef.current ?? Date.now());
     const res = await saveGameSession({
       type: "game",
-      title: "Bump-and-Run Blitz",
+      title: `Bump-and-Run Blitz — ${effectiveClub}`,
       ...timing,
-      config: { gameId: "bump-and-run-blitz", results, summary },
+      config: { gameId: "bump-and-run-blitz", club: effectiveClub, results, summary },
       score: summary.made,
     }, noteSavedScore);
     if (res.success) toast.success("Saved!");
@@ -115,8 +134,26 @@ export default function BumpAndRunBlitzGame() {
           ))}
         </div>
 
+        <ShortGameClubPicker
+          label="Club for bump-and-runs"
+          bagLoading={bagLoading}
+          clubs={bumpRunBag}
+          selectedClub={selectedClub}
+          customClub={customClub}
+          onSelectClub={(entry) => { setSelectedClub(entry); setCustomClub(""); }}
+          onCustomClub={(value) => { setCustomClub(value); setSelectedClub(null); }}
+          gameId="bump-and-run-blitz"
+          personalBest={personalBest}
+          personalBestReady={personalBestReady}
+        />
+
         <RestIntervalSelector value={restInterval} onChange={setRestInterval} />
-        <Button size="lg" className="w-full h-14 text-lg mt-6" onClick={() => setPhase("playing")}>
+        <Button
+          size="lg"
+          className="w-full h-14 text-lg mt-6"
+          disabled={!(selectedClub || customClub)}
+          onClick={() => setPhase("playing")}
+        >
           Start Blitz
         </Button>
       </div>
@@ -134,6 +171,10 @@ export default function BumpAndRunBlitzGame() {
         <div className="flex items-center gap-3 mb-2">
           <Target className="h-8 w-8 text-accent" />
           <h1 className="text-3xl font-semibold tracking-tighter">Bump-and-Run Blitz</h1>
+        </div>
+
+        <div className="bg-primary text-primary-foreground rounded-2xl px-5 py-3 mb-6 text-center text-sm font-semibold">
+          {effectiveClub}
         </div>
 
         <div className="mb-6">
@@ -203,7 +244,13 @@ export default function BumpAndRunBlitzGame() {
                     <div className="text-sm text-muted-foreground mt-1">{summary.percentage}% success</div>
                   </div>
 
-                  <GameScoreCompare gameId="bump-and-run-blitz" score={summary.made} personalBest={personalBest} personalBestReady={personalBestReady} />
+                  <GameScoreCompare
+                    gameId="bump-and-run-blitz"
+                    score={summary.made}
+                    personalBest={personalBest}
+                    personalBestReady={personalBestReady}
+                    clubLabel={effectiveClub}
+                  />
 
                   <div className="bg-card border rounded-2xl p-5 text-sm">
                     {results.map((r, i) => (

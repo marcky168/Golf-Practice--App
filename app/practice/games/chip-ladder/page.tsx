@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Target, RotateCcw, Save, Loader2 } from "lucide-react";
+import { ArrowLeft, Target, RotateCcw, Save } from "lucide-react";
 import { toast } from "sonner";
 import { calculateChipLadderScore, CHIP_LADDER_DISTANCES } from "@/lib/practice/games";
 import { getClubBag, type ClubEntry } from "@/app/actions";
@@ -14,7 +14,9 @@ import { markUserHasPracticed } from "@/lib/markHasPracticed";
 import { RestBetweenShots, RestIntervalSelector } from "@/components/practice/RestBetweenShots";
 import { IntentionPicker, type ShapeType, type TrajectoryType } from "@/components/practice/IntentionPicker";
 import { GameScoreCompare } from "@/components/practice/GameScoreCompare";
+import { ShortGameClubPicker } from "@/components/practice/ShortGameClubPicker";
 import { useGamePersonalBest } from "@/components/practice/useGamePersonalBest";
+import { isWedgeClub } from "@/lib/practice/short-game-clubs";
 
 type BallScore = 5 | 3 | 1 | 0;
 
@@ -25,15 +27,7 @@ const scoreOptions: { value: BallScore; label: string; detail: string }[] = [
   { value: 0, label: "Outside 10 ft", detail: "Miss or poor leave" },
 ];
 
-function isWedgeOrShort(entry: ClubEntry): boolean {
-  const n = entry.club.toLowerCase();
-  if (n.includes("°") || n.includes("wedge") || /\b(48|50|52|54|56|58|60|62)\b/.test(n)) return true;
-  if (n.includes("pw") || n.includes("pitch") || n.includes("gap") || n.includes("sand") || n.includes("lob")) return true;
-  return entry.carry > 0 && entry.carry <= 130;
-}
-
 export default function ChipLadderGame() {
-  const { personalBest, noteSavedScore, personalBestReady } = useGamePersonalBest("chip-ladder");
   const [phase, setPhase] = useState<"setup" | "playing">("setup");
   const sessionStartedAtRef = useSessionStartedAt(phase === "playing");
   const [bagLoading, setBagLoading] = useState(true);
@@ -47,8 +41,9 @@ export default function ChipLadderGame() {
   const [restInterval, setRestInterval] = useState(0);
   const [isResting, setIsResting] = useState(false);
 
-  const wedgeBag = clubBag.filter(isWedgeOrShort);
+  const wedgeBag = clubBag.filter(isWedgeClub);
   const effectiveClub = (selectedClub?.club ?? customClub) || "Wedge";
+  const { personalBest, noteSavedScore, personalBestReady } = useGamePersonalBest("chip-ladder", effectiveClub);
   const intentionSet = sessionShape !== null && sessionTrajectory !== null;
   const isComplete = results.every((d) => d.length === 3);
   const currentDist = CHIP_LADDER_DISTANCES[currentDistanceIndex];
@@ -58,7 +53,7 @@ export default function ChipLadderGame() {
   useEffect(() => {
     getClubBag().then((bag) => {
       setClubBag(bag);
-      const wedges = bag.filter(isWedgeOrShort);
+      const wedges = bag.filter(isWedgeClub);
       if (wedges.length > 0) setSelectedClub(wedges[0]);
       setBagLoading(false);
     });
@@ -125,44 +120,17 @@ export default function ChipLadderGame() {
         </p>
 
         <div className="space-y-6">
-          <div>
-            <div className="text-sm font-semibold mb-2">Wedge / short club</div>
-            {bagLoading ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" /> Loading bag…
-              </div>
-            ) : wedgeBag.length > 0 ? (
-              <>
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {wedgeBag.map((entry) => (
-                    <button
-                      key={entry.club}
-                      type="button"
-                      onClick={() => { setSelectedClub(entry); setCustomClub(""); }}
-                      className={`px-4 py-2 rounded-full border text-sm font-medium transition ${
-                        selectedClub?.club === entry.club ? "bg-primary text-primary-foreground border-primary" : "bg-card hover:bg-muted"
-                      }`}
-                    >
-                      {entry.club}
-                    </button>
-                  ))}
-                </div>
-                <input
-                  value={customClub}
-                  onChange={(e) => { setCustomClub(e.target.value); setSelectedClub(null); }}
-                  placeholder="Or type a club…"
-                  className="w-full rounded-xl border bg-card px-3 py-2 text-sm"
-                />
-              </>
-            ) : (
-              <input
-                value={customClub}
-                onChange={(e) => setCustomClub(e.target.value)}
-                placeholder="56°, PW, Gap…"
-                className="w-full rounded-xl border bg-card px-4 py-3 text-lg"
-              />
-            )}
-          </div>
+          <ShortGameClubPicker
+            bagLoading={bagLoading}
+            clubs={wedgeBag}
+            selectedClub={selectedClub}
+            customClub={customClub}
+            onSelectClub={(entry) => { setSelectedClub(entry); setCustomClub(""); }}
+            onCustomClub={(value) => { setCustomClub(value); setSelectedClub(null); }}
+            gameId="chip-ladder"
+            personalBest={personalBest}
+            personalBestReady={personalBestReady}
+          />
 
           <div>
             <div className="text-sm font-semibold mb-1">Shot intention</div>
@@ -255,7 +223,13 @@ export default function ChipLadderGame() {
                     <div className="text-xl mt-1">out of {result.max} points</div>
                   </div>
 
-                  <GameScoreCompare gameId="chip-ladder" score={result.total} personalBest={personalBest} personalBestReady={personalBestReady} />
+                  <GameScoreCompare
+                    gameId="chip-ladder"
+                    score={result.total}
+                    personalBest={personalBest}
+                    personalBestReady={personalBestReady}
+                    clubLabel={effectiveClub}
+                  />
 
                   <div className="bg-card border rounded-2xl p-5">
                     <div className="font-medium mb-3">By distance</div>

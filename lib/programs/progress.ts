@@ -18,6 +18,8 @@ type AnySession = {
   config: { programId?: string; programLog?: ProgramSessionLog } | null;
 };
 
+export type { AnySession };
+
 export interface ProgramProgress {
   currentPhaseIndex: number;
   currentPhaseId: string;

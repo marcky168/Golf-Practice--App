@@ -5,10 +5,34 @@ import { getProgramById } from "@/lib/programs/registry";
 import { computeProgramProgress, todaysPhaseId } from "@/lib/programs/progress";
 import { ProgramSessionRunner } from "@/components/programs/ProgramSessionRunner";
 import type { SessionConfig } from "@/lib/practice/types";
+import type { ProgramSessionStep } from "@/lib/programs/types";
 
 const PROGRAM_ID = "driver-program";
 
-export default async function DriverProgramSessionPage() {
+const SESSION_STEPS: ProgramSessionStep[] = [
+  "intro",
+  "warmup",
+  "compile-1",
+  "micro-rest",
+  "compile-2",
+  "consolidate",
+  "recap",
+  "tracking",
+];
+
+function parseStep(value?: string): ProgramSessionStep | undefined {
+  if (value && SESSION_STEPS.includes(value as ProgramSessionStep)) {
+    return value as ProgramSessionStep;
+  }
+  return undefined;
+}
+
+type PageProps = {
+  searchParams: Promise<{ phase?: string; step?: string }>;
+};
+
+export default async function DriverProgramSessionPage({ searchParams }: PageProps) {
+  const { phase: phaseParam, step: stepParam } = await searchParams;
   const program = getProgramById(PROGRAM_ID);
   if (!program) {
     return <div className="p-8 text-center text-muted-foreground">Program not found.</div>;
@@ -32,12 +56,16 @@ export default async function DriverProgramSessionPage() {
     }
   }
 
-  const progress  = computeProgramProgress(program, sessions);
-  const phaseId   = todaysPhaseId(program, progress);
-  const phase     = program.phases.find(p => p.id === phaseId) ?? program.phases[0];
-  const sessionInPhase = progress.currentPhaseId === phase.id
-    ? progress.sessionsInCurrentPhase + 1
-    : 1;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const progress = computeProgramProgress(program, sessions as any[]);
+  const overridePhaseId =
+    phaseParam && program.phases.some(p => p.id === phaseParam) ? phaseParam : undefined;
+  const phaseId = todaysPhaseId(program, progress, overridePhaseId);
+  const phase = program.phases.find(p => p.id === phaseId) ?? program.phases[0];
+  const sessionInPhase =
+    progress.currentPhaseId === phase.id ? progress.sessionsInCurrentPhase + 1 : 1;
+  const initialStep = parseStep(stepParam);
+  const allowStepPicker = Boolean(overridePhaseId || initialStep);
 
   if (!phase) {
     return (
@@ -55,6 +83,9 @@ export default async function DriverProgramSessionPage() {
       program={program}
       phase={phase}
       sessionInPhase={sessionInPhase}
+      initialStep={initialStep}
+      allowStepPicker={allowStepPicker}
+      practiceMode={Boolean(overridePhaseId)}
     />
   );
 }
