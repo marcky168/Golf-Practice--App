@@ -1,10 +1,10 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Target, Clock, Flame, TrendingUp, BarChart3, ChevronRight, GraduationCap } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Target, Clock, Flame, TrendingUp, BarChart3, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { format, subMonths } from "date-fns";
 import { getUserSessions } from "@/app/actions";
-import { computeWeakSpotsByClubShape } from "@/lib/practice/insights";
+import { computeWeakSpotsByClubShape, recommendPracticeFor } from "@/lib/practice/insights";
 import type { SessionConfig } from "@/lib/practice/types";
 import { getLoggedPracticeMinutes, getSessionDurationMinutes } from "@/lib/practice/session-duration";
 import { WelcomeHint } from "@/components/WelcomeHint";
@@ -12,16 +12,21 @@ import { PartialSessionBanner } from "@/components/PartialSessionBanner";
 import { RepeatLastSessionCard } from "@/components/RepeatLastSessionCard";
 import { DashboardHero } from "@/components/DashboardHero";
 import { PwaInstallNudge } from "@/components/PwaInstallNudge";
+import { ContinueProgramCard } from "@/components/ContinueProgramCard";
+import {
+  getPrimaryProgramCard,
+  sessionsForProgramProgress,
+} from "@/lib/programs/dashboard";
 
-// Helper: Calculate current practice streak
-function calculateCurrentStreak(sessions: any[]): number {
+function calculateCurrentStreak(sessions: { type: string; started_at: string }[]): number {
   const practiceSessions = sessions.filter(s => s.type !== "planned");
   if (!practiceSessions.length) return 0;
 
-  // Get unique practice dates (YYYY-MM-DD), sorted newest first
-  const uniqueDates = Array.from(new Set(
-    practiceSessions.map(s => new Date(s.started_at).toISOString().split("T")[0])
-  )).sort().reverse();
+  const uniqueDates = Array.from(
+    new Set(practiceSessions.map(s => new Date(s.started_at).toISOString().split("T")[0]))
+  )
+    .sort()
+    .reverse();
 
   let streak = 0;
   let currentDate = new Date();
@@ -47,44 +52,57 @@ function calculateCurrentStreak(sessions: any[]): number {
 export default async function GolfPracticeOSDashboard() {
   const { getAuthUser } = await import("@/lib/supabase/server");
   const user = await getAuthUser();
-  const sessions = user ? await getUserSessions(50) : [];
+  // Need enough history for program gates (game rounds) + dashboard stats
+  const sessions = user ? await getUserSessions(200) : [];
 
-  // === Compute real stats ===
   const now = new Date();
   const oneMonthAgo = subMonths(now, 1);
 
   const completedSessions = sessions.filter(s => s.type !== "planned");
-  const sessionsThisMonth = completedSessions.filter(s =>
-    new Date(s.started_at) >= oneMonthAgo
-  );
+  const sessionsThisMonth = completedSessions.filter(s => new Date(s.started_at) >= oneMonthAgo);
 
   const totalMinutes = getLoggedPracticeMinutes(sessions);
   const totalHours = Math.round((totalMinutes / 60) * 10) / 10;
-
-  // Current streak calculation
   const streak = calculateCurrentStreak(sessions);
 
-  // Most common session title (specific practice/game, not just the type)
-  const titleCounts = completedSessions.reduce((acc: any, s) => {
+  const titleCounts = completedSessions.reduce((acc: Record<string, number>, s) => {
     const key = s.title || s.type;
     acc[key] = (acc[key] || 0) + 1;
     return acc;
   }, {});
-  const mostCommonType = Object.keys(titleCounts).sort((a, b) => titleCounts[b] - titleCounts[a])[0] || "—";
+  const mostCommonType =
+    Object.keys(titleCounts).sort((a, b) => titleCounts[b] - titleCounts[a])[0] || "—";
 
   const recentSessions = sessions.slice(0, 3);
 
-  // Top weak spot for the Suggested Focus card
   const insightSessions = completedSessions.map(s => ({
     started_at: s.started_at,
     config: s.config as SessionConfig | null,
   }));
   const weakSpots = computeWeakSpotsByClubShape(insightSessions);
   const topWeakSpot = weakSpots.find(w => w.totalReps >= 3) ?? null;
+  const weakSpotRec =
+    topWeakSpot && topWeakSpot.hitRate < 80
+      ? recommendPracticeFor("club", topWeakSpot)
+      : null;
+
+  const programSessions = sessionsForProgramProgress(sessions);
+  const primaryProgram = user ? getPrimaryProgramCard(programSessions) : null;
+  const hasProgramActivity =
+    !!primaryProgram &&
+    (primaryProgram.progress.totalProgramSessions > 0 || primaryProgram.progress.gateMet);
+
+  // One primary next action below the hero — avoid stacking equal-weight cards
+  type NextAction = "program" | "weak-spot" | "repeat" | null;
+  let nextAction: NextAction = null;
+  if (user) {
+    if (hasProgramActivity) nextAction = "program";
+    else if (topWeakSpot && weakSpotRec) nextAction = "weak-spot";
+    else nextAction = "repeat";
+  }
+
   return (
     <div className="min-h-screen bg-background pb-20">
-
-      {/* Hero — gradient banner with white skill cards */}
       <div className="dashboard-hero w-full">
         <div className="dashboard-hero-inner max-w-7xl mx-auto px-4 pt-8 pb-10">
           <WelcomeHint />
@@ -102,19 +120,13 @@ export default async function GolfPracticeOSDashboard() {
         </div>
       </div>
 
-      <main className="max-w-7xl mx-auto px-4 pt-8 pb-12 space-y-10">
-
-        {/* Unsaved session reminder */}
+      <main className="max-w-7xl mx-auto px-4 pt-8 pb-12 space-y-8">
         <PartialSessionBanner />
 
         {user && completedSessions.length > 0 && (
           <PwaInstallNudge hasCompletedSession />
         )}
 
-        {/* One-tap repeat shortcuts */}
-{user && <RepeatLastSessionCard />}
-
-        {/* Strong Welcome for users with zero sessions */}
         {sessions.length === 0 && (
           <Card className="border-primary/30 bg-gradient-to-br from-card to-muted/30">
             <CardContent className="p-8">
@@ -124,15 +136,15 @@ export default async function GolfPracticeOSDashboard() {
                 </div>
                 <h2 className="text-3xl font-semibold tracking-tighter">Welcome to Golf Practice OS</h2>
                 <p className="text-lg text-muted-foreground mt-3 max-w-md mx-auto">
-                  A focused space for <strong>deliberate range practice</strong> — 
+                  A focused space for <strong>deliberate range practice</strong> —
                   designed to complement Arccos, not replace it.
                 </p>
               </div>
 
               <div className="max-w-xl mx-auto">
                 <p className="text-sm text-muted-foreground mb-4 text-center">
-                  Most golfers waste range time on mindless repetition. 
-                  This app helps you practice with purpose.
+                  Most golfers waste range time on mindless repetition. This app helps you practice
+                  with purpose.
                 </p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
@@ -149,23 +161,26 @@ export default async function GolfPracticeOSDashboard() {
                     </div>
                   </div>
                   <div className="bg-background/60 rounded-xl p-4 border">
-                    <div className="font-semibold mb-1 text-primary">Games &amp; Challenges</div>
+                    <div className="font-semibold mb-1 text-primary">Programs</div>
                     <div className="text-muted-foreground text-xs leading-snug">
-                      Pressure training. 10-Ball, Lag Ladders, Up &amp; Downs — builds mental game.
+                      Multi-phase plans — Break 90 Scoring Method, Driver Program, and more.
                     </div>
                   </div>
                   <div className="bg-background/60 rounded-xl p-4 border">
-                    <div className="font-semibold mb-1 text-primary">Calendar + Planning</div>
+                    <div className="font-semibold mb-1 text-primary">Games &amp; Challenges</div>
                     <div className="text-muted-foreground text-xs leading-snug">
-                      Schedule sessions in advance. Consistency is the real secret.
+                      Pressure training. Ladders, matrices, up-and-downs — builds the mental game.
                     </div>
                   </div>
                 </div>
 
                 <div className="mt-6 text-center">
                   <p className="text-xs text-muted-foreground">
-                    Start with 20–30 minutes of Quick Block or Random / Transfer today.
-                    You’ll feel the difference.
+                    Start with a skill above, or open{" "}
+                    <Link href="/programs" className="underline underline-offset-2 text-primary">
+                      Programs
+                    </Link>{" "}
+                    for a structured plan.
                   </p>
                 </div>
               </div>
@@ -173,47 +188,26 @@ export default async function GolfPracticeOSDashboard() {
           </Card>
         )}
 
-        {/* Programs — structured multi-phase training plans */}
-        {user && (
-          <Link href="/programs">
-            <Card className="border-l-4 border-l-blue-500 hover:shadow-md transition cursor-pointer">
-              <CardContent className="pt-5 pb-5">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-950/40 flex items-center justify-center shrink-0">
-                    <GraduationCap className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[10px] font-bold tracking-widest text-blue-600 dark:text-blue-400 uppercase mb-0.5">
-                      Programs
-                    </div>
-                    <div className="font-semibold">Driver Program</div>
-                    <div className="text-sm text-muted-foreground">
-                      TPI setup + 7-phase fast-learning protocol
-                    </div>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
+        {/* Single primary next action */}
+        {user && nextAction === "program" && primaryProgram && (
+          <ContinueProgramCard primary={primaryProgram} />
         )}
 
-        {/* Suggested Focus — derived from weak spots analysis */}
-        {user && topWeakSpot && (
-          <Link href="/practice/block">
-            <Card className="border-l-4 border-l-rose-400 hover:shadow-md transition cursor-pointer">
+        {user && nextAction === "weak-spot" && topWeakSpot && weakSpotRec && (
+          <Link href={weakSpotRec.href}>
+            <Card className="border-l-4 border-l-primary hover:shadow-md transition cursor-pointer">
               <CardContent className="pt-5 pb-5">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-950/40 flex items-center justify-center shrink-0">
-                    <Target className="h-5 w-5 text-rose-600 dark:text-rose-400" />
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                    <Target className="h-5 w-5 text-primary" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[10px] font-bold tracking-widest text-rose-600 dark:text-rose-400 uppercase mb-0.5">
+                    <div className="text-[10px] font-bold tracking-widest text-primary uppercase mb-0.5">
                       Suggested focus
                     </div>
                     <div className="font-semibold">{topWeakSpot.label}</div>
                     <div className="text-sm text-muted-foreground">
-                      {topWeakSpot.hitRate}% hit rate across {topWeakSpot.totalReps} reps — work on this today
+                      {topWeakSpot.hitRate}% hit rate · try {weakSpotRec.label}
                     </div>
                   </div>
                   <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -223,103 +217,115 @@ export default async function GolfPracticeOSDashboard() {
           </Link>
         )}
 
-        {/* Insights shortcut — visible once user has sessions */}
-        {user && completedSessions.length >= 3 && (
-          <Link href="/insights">
-            <Card className="border-l-4 border-l-violet-400 hover:shadow-md transition cursor-pointer">
-              <CardContent className="pt-5 pb-5">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-violet-100 dark:bg-violet-950/40 flex items-center justify-center shrink-0">
-                    <BarChart3 className="h-5 w-5 text-violet-600 dark:text-violet-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold">Shot Insights</div>
-                    <div className="text-sm text-muted-foreground">Weak spots by club, shape &amp; time of day</div>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
+        {user && nextAction === "repeat" && <RepeatLastSessionCard />}
+
+        {/* Secondary: programs entry when not the primary CTA */}
+        {user && nextAction !== "program" && primaryProgram && (
+          <ContinueProgramCard primary={primaryProgram} />
         )}
 
-        {/* Real Stats Row */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="border-l-4 border-l-orange-400">
-            <CardContent className="pt-6">
+        {/* Compact stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Card>
+            <CardContent className="pt-5 pb-5">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
-                  <Flame className="h-5 w-5 text-orange-500" />
+                <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  <Flame className="h-4 w-4 text-primary" />
                 </div>
                 <div>
-                  <div className="text-3xl font-semibold tabular-nums">{streak}</div>
-                  <div className="text-sm text-muted-foreground">Day Streak</div>
+                  <div className="text-2xl font-semibold tabular-nums">{streak}</div>
+                  <div className="text-xs text-muted-foreground">Day streak</div>
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card className="border-l-4 border-l-primary">
-            <CardContent className="pt-6">
+          <Card>
+            <CardContent className="pt-5 pb-5">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                  <Target className="h-5 w-5 text-primary" />
+                <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  <Target className="h-4 w-4 text-primary" />
                 </div>
                 <div>
-                  <div className="text-3xl font-semibold tabular-nums">{sessionsThisMonth.length}</div>
-                  <div className="text-sm text-muted-foreground">Sessions This Month</div>
+                  <div className="text-2xl font-semibold tabular-nums">{sessionsThisMonth.length}</div>
+                  <div className="text-xs text-muted-foreground">This month</div>
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card className="border-l-4 border-l-blue-400">
-            <CardContent className="pt-6">
+          <Card>
+            <CardContent className="pt-5 pb-5">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                  <Clock className="h-5 w-5 text-blue-500" />
+                <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  <Clock className="h-4 w-4 text-primary" />
                 </div>
                 <div>
-                  <div className="text-3xl font-semibold tabular-nums">{totalHours}h</div>
-                  <div className="text-sm text-muted-foreground">Focused Time</div>
+                  <div className="text-2xl font-semibold tabular-nums">{totalHours}h</div>
+                  <div className="text-xs text-muted-foreground">Focused time</div>
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card className="border-l-4 border-l-accent">
-            <CardContent className="pt-6">
+          <Card>
+            <CardContent className="pt-5 pb-5">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
-                  <TrendingUp className="h-5 w-5 text-accent" />
+                <div className="w-9 h-9 rounded-full bg-accent/15 flex items-center justify-center shrink-0">
+                  <TrendingUp className="h-4 w-4 text-accent" />
                 </div>
-                <div>
-                  <div className="text-base font-semibold leading-snug line-clamp-2">{mostCommonType}</div>
-                  <div className="text-sm text-muted-foreground">Most Practiced</div>
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold leading-snug line-clamp-2">{mostCommonType}</div>
+                  <div className="text-xs text-muted-foreground">Most practiced</div>
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Recent Sessions + Tip */}
+        {user && completedSessions.length >= 3 && (
+          <Link href="/insights">
+            <Card className="hover:shadow-md transition cursor-pointer">
+              <CardContent className="pt-5 pb-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                    <BarChart3 className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold">Shot Insights</div>
+                    <div className="text-sm text-muted-foreground">
+                      Weak spots by club, shape &amp; time of day
+                    </div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+        )}
+
         <div className="grid lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold tracking-tight text-xl">Recent Sessions</h2>
-              <Link href="/history" className="text-sm text-primary hover:underline">View all →</Link>
+              <Link href="/history" className="text-sm text-primary hover:underline">
+                View all →
+              </Link>
             </div>
             {recentSessions.length > 0 ? (
               <div className="space-y-3">
-                {recentSessions.map((session) => (
+                {recentSessions.map(session => (
                   <Card key={session.id} className="golf-card">
                     <CardContent className="p-4 flex items-center justify-between">
                       <div>
                         <div className="font-medium">{session.title}</div>
                         <div className="text-sm text-muted-foreground">
-                          {format(new Date(session.started_at), "MMM d")} • {getSessionDurationMinutes(session) || "?"} min
+                          {format(new Date(session.started_at), "MMM d")} •{" "}
+                          {getSessionDurationMinutes(session) || "?"} min
                           {session.overall_feel && ` • Feel ${session.overall_feel}/5`}
                         </div>
                       </div>
                       <Link href="/history">
-                        <Button variant="ghost" size="sm">Details</Button>
+                        <Button variant="ghost" size="sm">
+                          Details
+                        </Button>
                       </Link>
                     </CardContent>
                   </Card>
@@ -339,16 +345,17 @@ export default async function GolfPracticeOSDashboard() {
             <Card className="bg-accent text-accent-foreground border-accent">
               <CardContent className="pt-6">
                 <p className="text-sm leading-relaxed font-medium">
-                  After every session, spend 5 minutes with your eyes closed replaying your best 3 shots.
-                  This is when the brain consolidates motor learning (Huberman protocol).
+                  After every session, spend 5 minutes with your eyes closed replaying your best 3
+                  shots. This is when the brain consolidates motor learning (Huberman protocol).
                 </p>
-                <div className="text-xs opacity-70 mt-4">— Neural replay window is open right after focused practice</div>
+                <div className="text-xs opacity-70 mt-4">
+                  — Neural replay window is open right after focused practice
+                </div>
               </CardContent>
             </Card>
           </div>
         </div>
       </main>
-
     </div>
   );
 }

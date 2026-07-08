@@ -45,6 +45,7 @@ import {
 } from '@/components/ui/dialog';
 import { filterClubsForBunkerScenario } from '@/lib/practice/bunker-scenarios';
 import { filterClubsForChippingScenario } from '@/lib/practice/chipping-scenarios';
+import { useSessionImmersive } from '@/lib/use-session-immersive';
 
 function scenarioHeading(category?: string): string {
   if (category === 'bunker') return 'Bunker scenario';
@@ -104,6 +105,8 @@ export function SessionRunner({
   userBagClubs = [],
 }: SessionRunnerProps) {
   const [phase, setPhase] = useState<Phase>('running');
+  // Hide global header/nav while the session is active (more screen at the range)
+  useSessionImmersive(true);
   const [currentIndex, setCurrentIndex] = useState(initialCurrentIndex ?? 0);
   const [repRecords, setRepRecords] = useState<RepRecord[]>(initialRepRecords ?? []);
   const [isEditingCue, setIsEditingCue] = useState(false);

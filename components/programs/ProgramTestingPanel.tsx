@@ -59,15 +59,15 @@ export function ProgramTestingPanel({ program }: Props) {
   }
 
   return (
-    <div className="rounded-2xl border border-dashed border-amber-400/50 bg-amber-50/40 dark:bg-amber-950/20 p-5 mb-6">
+    <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-4 mb-2">
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between gap-2 text-left"
+        className="w-full flex items-center justify-between gap-2 text-left min-h-[44px]"
       >
         <div className="flex items-center gap-2">
-          <Beaker className="h-4 w-4 text-amber-700 dark:text-amber-400" />
-          <span className="font-semibold text-sm">Testing &amp; practice tools</span>
+          <Beaker className="h-4 w-4 text-muted-foreground" />
+          <span className="font-medium text-sm text-muted-foreground">Testing &amp; practice tools</span>
         </div>
         <span className="text-xs text-muted-foreground">{open ? "Hide" : "Show"}</span>
       </button>

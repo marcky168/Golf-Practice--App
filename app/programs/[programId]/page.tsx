@@ -4,9 +4,10 @@ import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/server";
 import { getProgramById } from "@/lib/programs/registry";
 import { computeProgramProgress } from "@/lib/programs/progress";
+import { describeGateProgress, sessionsForProgramProgress } from "@/lib/programs/dashboard";
 import { CueCardDisplay } from "@/components/programs/CueCardDisplay";
 import { ProgramTestingPanel } from "@/components/programs/ProgramTestingPanel";
-import { GAMES } from "@/lib/practice/games";
+import { ProgramDetailsAccordion } from "@/components/programs/ProgramDetailsAccordion";
 import type { SessionConfig } from "@/lib/practice/types";
 
 type PageProps = {
@@ -20,11 +21,17 @@ export default async function ProgramOverviewPage({ params }: PageProps) {
     return <div className="p-8 text-center text-muted-foreground">Program not found.</div>;
   }
 
-  // Load past program sessions
   const supabase = await createClient();
-  let sessions: { started_at: string; type?: string; score?: number | null; config: SessionConfig | null }[] = [];
+  let sessions: {
+    started_at: string;
+    type?: string;
+    score?: number | null;
+    config: SessionConfig | null;
+  }[] = [];
   if (supabase) {
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (user) {
       const { data } = await supabase
         .from("practice_sessions")
@@ -44,42 +51,42 @@ export default async function ProgramOverviewPage({ params }: PageProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const progress = computeProgramProgress(program, sessions as any[]);
   const currentPhase = program.phases[progress.currentPhaseIndex];
+  const anySessions = sessionsForProgramProgress(sessions);
+  const gateUi = describeGateProgress(program, progress, anySessions);
 
   return (
     <div className="min-h-screen bg-background pb-20 max-w-2xl mx-auto px-4 pt-6">
-      <Link href="/programs" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6">
+      <Link
+        href="/programs"
+        className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6"
+      >
         <ArrowLeft className="h-4 w-4" /> Programs
       </Link>
 
       <h1 className="text-3xl font-semibold tracking-tighter mb-2">{program.name}</h1>
-      <p className="text-muted-foreground mb-6">{program.fullDescription}</p>
+      <p className="text-muted-foreground mb-6 text-sm leading-relaxed line-clamp-3">
+        {program.shortDescription}
+      </p>
 
-      <ProgramTestingPanel program={program} />
-
-      {/* Current phase + today's cue card */}
+      {/* Current phase + cue — above the fold */}
       <div className="rounded-2xl border-2 border-primary/30 bg-primary/5 p-5 mb-6">
-        <div className="flex items-start justify-between gap-3 mb-4">
-          <div>
-            <div className="text-[10px] uppercase tracking-widest text-primary font-semibold">
-              You are here
+        <div className="mb-4">
+          <div className="text-[10px] uppercase tracking-widest text-primary font-semibold">
+            You are here
+          </div>
+          <div className="text-xl font-semibold tracking-tight mt-0.5">
+            Phase {currentPhase.number} — {currentPhase.name}
+          </div>
+          <div className="text-sm text-muted-foreground mt-0.5">{currentPhase.skillFocus}</div>
+
+          <div className="mt-3">
+            <div className="h-2 rounded-full bg-muted overflow-hidden">
+              <div
+                className="h-full bg-primary transition-all duration-500 ease-out"
+                style={{ width: `${Math.max(4, gateUi.pct)}%` }}
+              />
             </div>
-            <div className="text-xl font-semibold tracking-tight mt-0.5">
-              Phase {currentPhase.number} — {currentPhase.name}
-            </div>
-            <div className="text-sm text-muted-foreground mt-0.5">
-              {currentPhase.skillFocus}
-            </div>
-            <div className="text-xs text-muted-foreground mt-2">
-              {progress.sessionsInCurrentPhase} session{progress.sessionsInCurrentPhase !== 1 ? "s" : ""} logged
-              {currentPhase.gate.requiredConsecutiveSessions && (
-                <> · gate needs {currentPhase.gate.requiredConsecutiveSessions} consecutive at {currentPhase.gate.requiredGoodPct ?? "—"}%</>
-              )}
-              {currentPhase.gate.gameGate && (
-                <> — or {currentPhase.gate.gameGate.requiredSessions} rounds of{" "}
-                {GAMES.find(g => g.id === currentPhase.gate.gameGate!.gameId)?.name ?? currentPhase.gate.gameGate.gameId}
-                {" "}scoring {currentPhase.gate.gameGate.targetScore}+</>
-              )}
-            </div>
+            <div className="text-xs text-muted-foreground mt-1.5 leading-snug">{gateUi.label}</div>
           </div>
         </div>
 
@@ -87,13 +94,13 @@ export default async function ProgramOverviewPage({ params }: PageProps) {
 
         <Link href={`/programs/${program.id}/session`}>
           <Button size="lg" className="w-full h-14 mt-4 text-base font-semibold">
-            <Play className="mr-2 h-5 w-5" /> Start Today's Session
+            <Play className="mr-2 h-5 w-5" /> Start Today&apos;s Session
           </Button>
         </Link>
 
         {progress.lastOneThingNext && (
           <div className="mt-3 text-xs text-muted-foreground italic">
-            Last session note: "{progress.lastOneThingNext}"
+            Last session note: &ldquo;{progress.lastOneThingNext}&rdquo;
           </div>
         )}
       </div>
@@ -104,21 +111,22 @@ export default async function ProgramOverviewPage({ params }: PageProps) {
         {program.phases.map((phase, i) => {
           const isPast = i < progress.currentPhaseIndex;
           const isCurrent = i === progress.currentPhaseIndex;
-          // Only the next phase unlocks when the gate is met — everything beyond it stays locked.
-          const maxReachableIndex = progress.currentPhaseIndex + (progress.nextPhaseUnlocked ? 1 : 0);
+          const maxReachableIndex =
+            progress.currentPhaseIndex + (progress.nextPhaseUnlocked ? 1 : 0);
           const isLocked = i > maxReachableIndex;
-          const isNextUnlocked = i === progress.currentPhaseIndex + 1 && progress.nextPhaseUnlocked;
+          const isNextUnlocked =
+            i === progress.currentPhaseIndex + 1 && progress.nextPhaseUnlocked;
           return (
             <div
               key={phase.id}
-              className={`rounded-xl border px-4 py-3 flex items-start gap-3 ${
+              className={`rounded-xl border px-4 py-3 flex items-start gap-3 transition-opacity ${
                 isCurrent
                   ? "border-primary bg-primary/5"
                   : isPast
-                  ? "bg-card opacity-70"
-                  : isLocked
-                  ? "bg-muted/30 opacity-50"
-                  : "bg-card"
+                    ? "bg-card opacity-70"
+                    : isLocked
+                      ? "bg-muted/30 opacity-50"
+                      : "bg-card"
               }`}
             >
               <div className="shrink-0 mt-0.5">
@@ -127,7 +135,9 @@ export default async function ProgramOverviewPage({ params }: PageProps) {
                 ) : isLocked ? (
                   <Lock className="h-5 w-5 text-muted-foreground" />
                 ) : (
-                  <Circle className={`h-5 w-5 ${isCurrent ? "text-primary" : "text-muted-foreground"}`} />
+                  <Circle
+                    className={`h-5 w-5 ${isCurrent ? "text-primary" : "text-muted-foreground"}`}
+                  />
                 )}
               </div>
               <div className="flex-1 min-w-0">
@@ -148,10 +158,11 @@ export default async function ProgramOverviewPage({ params }: PageProps) {
                 </div>
                 <div className="font-semibold text-sm">{phase.name}</div>
                 <div className="text-xs text-muted-foreground mt-0.5">
-                  {phase.skillFocus} · {phase.estimatedSessions.min}–{phase.estimatedSessions.max} sessions
+                  {phase.skillFocus} · {phase.estimatedSessions.min}–{phase.estimatedSessions.max}{" "}
+                  sessions
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
-                  Cue: <span className="italic">"{phase.cueCard.cue}"</span>
+                  Cue: <span className="italic">&ldquo;{phase.cueCard.cue}&rdquo;</span>
                 </div>
               </div>
             </div>
@@ -159,53 +170,60 @@ export default async function ProgramOverviewPage({ params }: PageProps) {
         })}
       </div>
 
-      {/* Universal warm-up reference */}
-      <div className="rounded-2xl border bg-card p-5 mb-6">
-        <div className="flex items-center gap-2 mb-2">
-          <BookOpen className="h-4 w-4 text-muted-foreground" />
-          <h3 className="font-semibold text-sm tracking-tight">Default warm-up</h3>
-          <span className="text-xs text-muted-foreground ml-auto">{program.warmup.totalDuration}</span>
-        </div>
-        {program.phases.some(p => p.warmup) && (
-          <p className="text-[11px] text-muted-foreground mb-2">
-            Full-swing phases prescribe their own fuller warm-up in-session.
+      <div className="space-y-3 mb-6">
+        <ProgramDetailsAccordion
+          title="Default warm-up"
+          icon={<BookOpen className="h-4 w-4 text-muted-foreground" />}
+          meta={program.warmup.totalDuration}
+        >
+          {program.phases.some(p => p.warmup) && (
+            <p className="text-[11px] text-muted-foreground mb-2 mt-3">
+              Full-swing phases prescribe their own fuller warm-up in-session.
+            </p>
+          )}
+          <div className="space-y-1.5 mt-3">
+            {program.warmup.blocks.map((b, i) => (
+              <div key={i} className="text-xs text-muted-foreground leading-snug">
+                <span className="font-medium text-foreground">{b.duration}:</span> {b.description}
+              </div>
+            ))}
+          </div>
+        </ProgramDetailsAccordion>
+
+        <ProgramDetailsAccordion title='Define a "good shot"'>
+          <ul className="text-xs text-muted-foreground space-y-1 mb-2 mt-3">
+            {program.defineGoodShot.criteria.map((c, i) => (
+              <li key={i}>• {c}</li>
+            ))}
+          </ul>
+          <div className="text-xs font-medium text-foreground">{program.defineGoodShot.scoring}</div>
+        </ProgramDetailsAccordion>
+
+        <ProgramDetailsAccordion
+          title="Weekly schedule"
+          icon={<Calendar className="h-4 w-4 text-muted-foreground" />}
+        >
+          <div className="space-y-1.5 mt-3">
+            {program.weeklySchedule.map(d => (
+              <div key={d.day} className="flex gap-3 text-xs">
+                <span className="font-semibold text-foreground w-10 shrink-0">{d.day}</span>
+                <span className="text-muted-foreground">{d.activity}</span>
+              </div>
+            ))}
+          </div>
+        </ProgramDetailsAccordion>
+
+        <ProgramDetailsAccordion title="About this program">
+          <p className="text-xs text-muted-foreground leading-relaxed mt-3">{program.fullDescription}</p>
+          <p className="text-xs text-muted-foreground mt-2">
+            {program.estimatedWeeks.min}–{program.estimatedWeeks.max} weeks · {program.phases.length}{" "}
+            phases
           </p>
-        )}
-        <div className="space-y-1.5">
-          {program.warmup.blocks.map((b, i) => (
-            <div key={i} className="text-xs text-muted-foreground leading-snug">
-              <span className="font-medium text-foreground">{b.duration}:</span> {b.description}
-            </div>
-          ))}
-        </div>
+        </ProgramDetailsAccordion>
       </div>
 
-      {/* Define "good shot" */}
-      <div className="rounded-2xl border bg-card p-5 mb-6">
-        <h3 className="font-semibold text-sm tracking-tight mb-2">Define a "good shot"</h3>
-        <ul className="text-xs text-muted-foreground space-y-1 mb-2">
-          {program.defineGoodShot.criteria.map((c, i) => (
-            <li key={i}>• {c}</li>
-          ))}
-        </ul>
-        <div className="text-xs font-medium text-foreground">{program.defineGoodShot.scoring}</div>
-      </div>
-
-      {/* Weekly schedule */}
-      <div className="rounded-2xl border bg-card p-5">
-        <div className="flex items-center gap-2 mb-3">
-          <Calendar className="h-4 w-4 text-muted-foreground" />
-          <h3 className="font-semibold text-sm tracking-tight">Weekly schedule</h3>
-        </div>
-        <div className="space-y-1.5">
-          {program.weeklySchedule.map(d => (
-            <div key={d.day} className="flex gap-3 text-xs">
-              <span className="font-semibold text-foreground w-10 shrink-0">{d.day}</span>
-              <span className="text-muted-foreground">{d.activity}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* Testing tools — collapsed by default, below the fold */}
+      <ProgramTestingPanel program={program} />
     </div>
   );
 }

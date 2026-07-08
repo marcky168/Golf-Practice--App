@@ -10,6 +10,7 @@ import {
   Shuffle,
   Wrench,
   Award,
+  GraduationCap,
 } from "lucide-react";
 
 type SkillTheme = {
@@ -132,6 +133,12 @@ const GAMES_THEME: SkillTheme = {
   accent: "border-t-orange-500",
 };
 
+const PROGRAMS_THEME: SkillTheme = {
+  icon: "text-primary",
+  badge: "bg-primary/10",
+  accent: "border-t-primary",
+};
+
 export function SkillFirstPicker({
   variant = "hero",
 }: {
@@ -165,6 +172,26 @@ export function SkillFirstPicker({
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Link
+          href="/programs"
+          className={
+            promoCardClass(PROGRAMS_THEME) +
+            (onHero
+              ? " sm:col-span-2"
+              : " border-primary/25 bg-primary/5 hover:border-primary/50 sm:col-span-2")
+          }
+        >
+          <div className="flex items-center gap-3">
+            <IconBadge icon={GraduationCap} theme={PROGRAMS_THEME} size="lg" />
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-base">Programs</div>
+              <div className="text-xs leading-snug text-muted-foreground">
+                Break 90 Scoring Method · Driver Program — phase-by-phase plans
+              </div>
+            </div>
+          </div>
+        </Link>
+
         <Link
           href="/practice/random"
           className={
