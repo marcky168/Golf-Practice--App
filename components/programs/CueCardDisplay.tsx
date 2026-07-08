@@ -7,14 +7,24 @@ interface Props {
 
 export function CueCardDisplay({ card, compact = false }: Props) {
   return (
-    <div className={`rounded-2xl border-2 border-primary bg-primary/5 ${compact ? "px-4 py-3" : "px-5 py-4"}`}>
-      <div className="text-[10px] uppercase tracking-widest text-primary font-semibold mb-1.5">
+    <div
+      className={`cue-card rounded-2xl border-2 border-primary/40 bg-gradient-to-br from-primary/8 via-primary/5 to-accent/10 ${
+        compact ? "px-4 py-3" : "px-5 py-5"
+      }`}
+    >
+      <div className="text-[10px] uppercase tracking-[0.2em] text-primary font-semibold mb-2">
         Cue card
       </div>
-      <div className={`font-semibold tracking-tight ${compact ? "text-lg" : "text-xl"} text-foreground`}>
+      <div
+        className={`font-semibold tracking-tight text-balance ${
+          compact ? "text-lg" : "text-2xl leading-snug"
+        } text-foreground`}
+      >
         {card.cue}
       </div>
-      <div className={`text-muted-foreground mt-1 ${compact ? "text-xs" : "text-sm"} italic leading-snug`}>
+      <div
+        className={`text-muted-foreground mt-2 ${compact ? "text-xs" : "text-sm"} leading-relaxed`}
+      >
         {card.feel}
       </div>
     </div>

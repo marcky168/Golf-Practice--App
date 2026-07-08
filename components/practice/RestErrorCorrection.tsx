@@ -145,6 +145,16 @@ function CommitmentRow({
           </button>
         ))}
       </div>
+      {value === false && (
+        <p className="text-[11px] text-muted-foreground mt-2 leading-snug">
+          Don&apos;t grade the miss — note what pulled you off target, then recommit on the next ball.
+        </p>
+      )}
+      {value === true && (
+        <p className="text-[11px] text-muted-foreground mt-2 leading-snug">
+          Good — only committed misses teach. Replay one clean rep, then go again.
+        </p>
+      )}
     </div>
   );
 }

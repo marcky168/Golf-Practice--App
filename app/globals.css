@@ -354,3 +354,22 @@ html.range-mode .border-amber-300\/60 {
 html.range-mode .bg-blue-50 {
   background-color: oklch(0.95 0.03 240);
 }
+
+/* Immersive session — hide global chrome so runners own the screen */
+html.session-immersive header.bg-primary {
+  display: none;
+}
+
+html.session-immersive nav.fixed.bottom-0 {
+  display: none;
+}
+
+html.session-immersive body {
+  /* BottomNav was reserving pb-20 on many pages; runners manage their own padding */
+  padding-bottom: 0;
+}
+
+/* Cue card presence */
+.cue-card {
+  box-shadow: 0 1px 0 oklch(0.32 0.08 155 / 0.08);
+}

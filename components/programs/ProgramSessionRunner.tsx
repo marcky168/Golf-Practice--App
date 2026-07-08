@@ -13,6 +13,7 @@ import { savePracticeSession } from "@/app/actions";
 import { unlockPracticeAudio } from "@/lib/practice/feedback";
 import { nextTargetScore } from "@/lib/practice/game-scores";
 import { useProgramGameScores, type GameScoreSummary } from "./useProgramGameScores";
+import { useSessionImmersive } from "@/lib/use-session-immersive";
 
 interface Props {
   program: Program;
@@ -86,6 +87,7 @@ export function ProgramSessionRunner({
 }: Props) {
   const router = useRouter();
   const [step, setStep] = useState<ProgramSessionStep>(initialStep ?? "intro");
+  useSessionImmersive(true);
   const sessionStartRef = useRef<number>(Date.now());
   const shellNav = allowStepPicker
     ? { allowStepPicker: true as const, onStepChange: setStep }
@@ -541,7 +543,7 @@ function PageShell({
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="min-h-screen bg-background pb-8">
       <div className="border-b sticky top-0 z-40 bg-background/95 backdrop-blur">
         <div className="max-w-xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="min-w-0 flex-1 pr-2">

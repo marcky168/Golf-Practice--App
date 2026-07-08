@@ -152,3 +152,16 @@ Bug-hunt + hardening pass ahead of live range testing. All changes in `ProgramSe
 **Input clamp + lock-icon logic.** Tracking sheet clamps `goodShots ≤ totalShots` (was allowing 12/10 = 120% goodPct, which satisfied gates and polluted the score column); save also clamps defensively. Overview phase timeline: `isLocked` was `i > currentPhaseIndex && !nextPhaseUnlocked`, which un-locked *every* future phase once a gate was met — fixed to `i > currentPhaseIndex + (nextPhaseUnlocked ? 1 : 0)` so only the next phase unlocks. `idleRestDone` check now set explicitly (was `toggleCheck`, so re-entering consolidate via the step-picker flipped it back off). `useProgramGameScores` fetch gained a `.catch` so an offline range drop degrades to "Set your baseline" instead of an unhandled rejection.
 
 **Rejected / deferred:** Offline save-queue (Sprint 2) not built yet — biggest remaining reliability gap for range use. `limit(200/500)` session windows on the program pages could eventually drop old passing game rounds out of gate evaluation; left as-is (deferred to a server-side filtered query). Verification of the two UI-visual fixes (clamp, lock icons) blocked by the preview harness not persisting Supabase auth cookies on `http://localhost` — relied on typecheck + full build (both program routes compiled clean) instead.
+
+---
+
+## Session — 2026-07-08
+
+### World-class UX polish — Programs discoverability + calm Home IA
+**Decision:** Treat Break 90 / Programs as a first-class product surface, not a hardcoded Driver card. Added `lib/programs/dashboard.ts` (`getPrimaryProgramCard`, `describeGateProgress`, `recommendedGameIdsForActivePrograms`) and `ContinueProgramCard` so Home shows the *active* program + phase + plain-English gate bar.  
+**Home IA:** One primary next action (Continue program → Suggested focus with real deep-link → Repeat last), then secondary Programs entry, compact stats (no rainbow left-borders), Insights tertiary.  
+**Discoverability:** Programs promo card in `SkillFirstPicker` (hero + Practice hub); Programs hub shows per-program phase progress; Games hub surfaces “For your current program” game links from the active phase’s `gameId` drills.  
+**Program overview:** Cue + Start + gate bar above the fold; warm-up / good-shot / schedule / about collapsed via `ProgramDetailsAccordion`; testing panel moved below the fold and visually demoted.  
+**Session chrome:** `useSessionImmersive` + `html.session-immersive` hides AppHeader + BottomNav during `SessionRunner` / `ProgramSessionRunner`.  
+**Microcopy:** Commitment row coaching lines on bail vs fully-in; cue cards get stronger typography/gradient. Games cards demote difficulty badges and lead with “Why it helps” + PB.  
+**Rejected:** Adding Programs to BottomNav (5th item cramped on mobile); offline save queue still deferred; full Scoring Zone game still deferred (program remains the vehicle).

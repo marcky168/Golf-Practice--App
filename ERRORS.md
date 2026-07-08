@@ -154,3 +154,18 @@ Invalid project directory provided, no such directory: /home/runner/work/Golf-Pr
 **Issue:** Verifying the two UI-visual fixes (input clamp, phase lock icons) required an authenticated program page. The preview browser reached Supabase (sign-in recorded server-side, `last_sign_in_at` updated) but never persisted the `sb-*` auth cookies, so every authed route bounced back to `/login`. Credentials were correct (confirmed via SQL on project `ahrqubudkllkseiphhgs`).  
 **Workaround:** Fell back to `npm run typecheck` + full `npm run build` (both `/programs/[programId]` routes compiled clean) for verification of type/route correctness; UI-pixel confirmation deferred to the real device.  
 **Lesson:** The preview harness can't complete cookie-based auth flows on localhost. For auth-gated UI, verify via typecheck/build and reason about the render, or test on the real logged-in device — don't burn round-trips re-attempting the login.
+
+---
+
+## Session — 2026-07-08
+
+### Dashboard Programs card still said "Driver Program" after Break 90 shipped
+**Bug / UX debt:** Home linked to `/programs` but the card title/subtitle were hardcoded to Driver Program + TPI copy, so Break 90 was invisible from the primary surface.  
+**Root cause:** Card was written when only one program existed and never updated when the registry grew.  
+**Fix:** Dynamic `ContinueProgramCard` driven by `getPrimaryProgramCard` / progress helpers.  
+**Lesson:** Any UI that names a registry entry must read the registry (or progress), never hardcode the first product’s marketing line.
+
+### Suggested Focus linked to generic `/practice/block`
+**Bug:** Weak-spot CTA ignored `recommendPracticeFor` and always sent users to block practice, even when Insights already knew the right game/program.  
+**Fix:** Use `recommendPracticeFor` for the href + label when hit rate &lt; 80%.  
+**Lesson:** If a pure mapper already exists for “what to work on,” the dashboard CTA must use it — don’t invent a second, dumber destination.
