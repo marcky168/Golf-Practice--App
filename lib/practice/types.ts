@@ -90,6 +90,8 @@ export interface RepErrorCorrection {
   startDirection?: "left" | "right";
   /** Distance control — was the shot short or long of target */
   distanceMiss?: "short" | "long";
+  /** Rule 9: on a miss, was the player fully (10/10) committed to the shot? */
+  committed?: boolean;
 }
 
 export interface RepRecordSnapshot {

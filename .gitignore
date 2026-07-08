@@ -36,3 +36,6 @@ next-env.d.ts
 
 # Supabase local
 .supabase/
+
+# Claude Code local settings (personal permission allowlist)
+.claude/settings.local.json

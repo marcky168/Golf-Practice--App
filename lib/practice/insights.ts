@@ -89,6 +89,39 @@ export function computeWeakSpotsByClubShape(sessions: SessionRow[]): WeakSpotRow
   );
 }
 
+// ── Commitment on misses (Rule 9) ─────────────────────────────────────────────
+
+export type CommitmentStat = {
+  totalMissesRated: number;   // misses where the 10/10-commitment check was answered
+  committedMisses: number;    // committed === true
+  uncommittedMisses: number;  // committed === false ("commitment leaks")
+  committedPct: number;       // 0–100 — share of rated misses hit with full commitment
+};
+
+/**
+ * The `committed` flag is only recorded on misses, so any rep with it set is a
+ * miss. A high uncommitted share means the cheapest strokes are mental, not swing.
+ */
+export function computeCommitmentStat(sessions: SessionRow[]): CommitmentStat {
+  let committed = 0;
+  let uncommitted = 0;
+  for (const session of sessions) {
+    for (const rep of session.config?.repRecords ?? []) {
+      const c = rep.errorCorrection?.committed;
+      if (c === undefined) continue;
+      if (c) committed += 1;
+      else uncommitted += 1;
+    }
+  }
+  const total = committed + uncommitted;
+  return {
+    totalMissesRated: total,
+    committedMisses: committed,
+    uncommittedMisses: uncommitted,
+    committedPct: total > 0 ? Math.round((committed / total) * 100) : 0,
+  };
+}
+
 // ── Time of day ───────────────────────────────────────────────────────────────
 
 export type TimeOfDayRow = {
@@ -241,6 +274,43 @@ export function directionInsight(row: WeakSpotRow): string | null {
   const leftPct = row.leftMisses / total;
   if (leftPct >= 0.65) return `Starts left on ${Math.round(leftPct * 100)}% of misses`;
   if (leftPct <= 0.35) return `Starts right on ${Math.round((1 - leftPct) * 100)}% of misses`;
+  return null;
+}
+
+// ── "What to work on" recommendations ─────────────────────────────────────────
+
+export type PracticeRecommendation = {
+  href: string;
+  label: string;
+};
+
+export type WeakSpotKind = "club" | "shape" | "trajectory" | "club-shape";
+
+/**
+ * Maps a weak spot to the most relevant scored game or program.
+ * Club keys look like "Driver", "3-Wood", "7-Iron", "PW", "56°", "Putter".
+ */
+export function recommendPracticeFor(kind: WeakSpotKind, row: WeakSpotRow): PracticeRecommendation | null {
+  if (kind === "shape" || kind === "trajectory") {
+    return { href: "/practice/games/9-shot-matrix", label: "9-Shot Flight Matrix" };
+  }
+
+  const club = (kind === "club-shape" ? row.key.split("__")[0] : row.key).toLowerCase();
+  if (club.includes("putter")) {
+    return { href: "/practice/games/lag-putting-ladder", label: "Lag Putting Ladder" };
+  }
+  if (club.includes("°") || /\b(pw|gw|sw|lw)\b/.test(club)) {
+    return { href: "/practice/games/pitch-ladder", label: "Pitch Ladder" };
+  }
+  if (club.includes("driver") || club.includes("wood") || club.includes("hybrid")) {
+    return { href: "/programs/driver-program", label: "Driver Program" };
+  }
+  if (club.includes("iron")) {
+    if (kind === "club-shape") {
+      return { href: "/practice/games/9-shot-matrix", label: "9-Shot Flight Matrix" };
+    }
+    return { href: "/practice/games/10-ball-accuracy", label: "10-Ball Accuracy" };
+  }
   return null;
 }
 

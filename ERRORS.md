@@ -89,3 +89,68 @@ Invalid project directory provided, no such directory: /home/runner/work/Golf-Pr
 **Root cause:** Tour Tempo mode intentionally emitted sounds only on beats 1 and 4; at low BPM this created long silent spans that felt like no output.  
 **Fix:** Switched to a clear three-tone descending sequence on beats 1–3 followed by a deliberate pause beat, and added explicit Tour Tempo preset settings (`18/6`, `21/7`, `24/8`, `27/9`, `30/10`).  
 **Lesson:** For tempo tools used on mobile and outdoors, explicit rhythmic phrasing (tone-tone-tone-pause) is clearer than sparse accent-only cues.
+
+---
+
+## Session — 2026-07-06
+
+### Second program in registry would have 404'd
+**Bug:** `lib/programs/registry.ts` claimed "Adding a program = new file + add to array. No UI changes needed." False: the hub (`app/programs/page.tsx`) linked to `/programs/${program.id}` dynamically, but the overview and session pages were hardcoded at `app/programs/driver-program/` with `const PROGRAM_ID = "driver-program"`. Adding `break-90-program` to the registry produced a hub card linking to a 404.  
+**Fix:** Converted to a dynamic route `app/programs/[programId]/` (+ `/session`) reading the id from `params`; deleted the hardcoded directory.  
+**Lesson:** When a registry/comment promises "no UI changes needed to add entries," add a second entry and click through it before trusting the claim — single-entry registries hide hardcoded routes.
+
+### Stale `.next` types broke typecheck after deleting a route directory
+**Bug:** After the Mac session deleted `app/programs/driver-program/`, `npm run typecheck` on Windows failed with `TS2307: Cannot find module '../../../app/programs/driver-program/page.js'` from `.next/dev/types/validator.ts`.  
+**Root cause:** Next.js dev-generated route types in `.next` still referenced the deleted pages; `tsc --noEmit` includes them.  
+**Fix:** `Remove-Item -Recurse -Force .next` then re-run. Build regenerates everything.  
+**Lesson:** After deleting or renaming route directories, clear `.next` before trusting typecheck results.
+
+### Supabase sign-up rejects `example.com` emails
+**Issue:** Creating a browser-verification account with `claude-test@example.com` failed with "Email address is invalid" — Supabase blocks known-fake domains.  
+**Fix:** Used plus-addressing on the real inbox (`marcky168+claudetest@gmail.com`), then confirmed the email via SQL (`update auth.users set email_confirmed_at = now()`) since no one can click the confirmation link mid-verification.  
+**Lesson:** For dev-account seeding, plus-address the owner's real email and confirm via SQL through the Supabase MCP.
+
+### `computeProgramProgress` early-return skipped the new gameGate check
+**Bug:** After adding `gameGate` evaluation to `computeProgramProgress`, phase 1 never unlocked from game scores. The function early-returns a hardcoded `gateMet: false` when there are zero program-session logs — and the whole point of a gameGate is that a user might satisfy it with scored-game rounds *before* logging any program session. My gameGate check sat after that early return, so it was dead in exactly the case it's meant for.
+**Fix:** The zero-logs branch now evaluates `program.phases[0].gate.gameGate` before returning. Verified in-browser: 2 lag-putting-ladder rounds ≥48 with 0 program sessions → phase 2 shows "Unlocked" and the session page resolves to Phase 2.
+**Lesson:** When adding an alternative data source to a function, check every early-return/short-circuit path — the "empty" branch is often exactly where the alternative source is the only signal available.
+
+### Timed rest-phase auto-advances during browser verification
+**Issue:** Verifying the Rule-9 commitment row meant driving a random session to the rest phase and answering a miss. With a 15-sec rest timer, doing "mark shot" and "answer No" as two separate tool round-trips let the timer expire and auto-advance to the next shot before the second call landed.
+**Fix:** Chain the whole interaction (mark → wait 500ms → click primary "No" → wait → assert commitment row) inside a single `preview_eval` Promise so it completes within the rest window.
+**Lesson:** For time-boxed UI states, script the full interaction in one eval rather than across round-trips.
+
+### No Node.js on the Mac side of this OneDrive-synced project
+**Issue:** `node`, `npm`, `npx` are not installed on this Mac; `node_modules/.bin` contains Windows `.cmd`/`.ps1` shims — the toolchain lives on the Windows machine. `npm run typecheck` could not be run for this session's changes.  
+**Workaround:** Manual review of new files against `lib/programs/types.ts`; all 12 `gameId` values verified against `app/practice/games/` directory names.  
+**Lesson:** Changes made on the Mac must be validated with `npm run typecheck` + `npm run build` on the Windows machine before shipping.
+
+---
+
+## Session — 2026-07-07
+
+### Program rest timers froze on iOS screen-lock (silent, would have failed in the field)
+**Bug:** `useCountdown` in `ProgramSessionRunner.tsx` used `setInterval` to decrement a `secondsLeft` state value by 1 each tick. iOS Safari suspends JS timers when the screen locks or the tab is backgrounded — and the micro-rest (3 min) and consolidate (5–10 min) phases explicitly tell the user to put the phone down / close their eyes. On unlock, the countdown had barely moved and the "continue" button was still `disabled`, stranding the user.  
+**Root cause:** State-decrement timers assume the tab stays foregrounded and the event loop keeps firing. Neither holds on a locked phone.  
+**Fix:** Derive remaining time from a wall-clock `endAt` timestamp captured once when the timer starts; recompute on each tick AND on `visibilitychange` so it snaps to the correct value the instant the phone is unlocked.  
+**Lesson:** Any countdown a user is told to walk away from must be wall-clock based, never interval-decrement. Timers that outlive a screen-lock cannot live in React state deltas.
+
+### `savePracticeSession` throw on network failure left the save button stuck forever
+**Bug:** `handleSave` awaited `savePracticeSession` with no try/catch. The action returns `{error}` for Supabase-level errors, but a genuine network failure (dropped range Wi-Fi/cellular) *throws*. The throw skipped `setSaving(false)`, so the button stayed disabled at "Saving…" permanently and the tracking-sheet entry was lost with no retry path.  
+**Fix:** try/catch/finally — `finally` always clears `saving`; catch shows a connection-specific toast; the button re-enables for retry.  
+**Lesson:** A server action that can throw needs a `finally` to release any "in-flight" UI lock. `res.success ? … : …` only covers the *returned-error* path, not the *thrown* path.
+
+### Practice-mode program sessions silently regressed the user's phase
+**Bug:** Starting a session via the `?phase=` practice/testing override and saving it wrote a normal `programLog` for that phase. Since `computeProgramProgress` defines "current phase = latest log's phase," saving a Phase-1 practice run moved a Phase-4 user back to Phase 1 — the exact opposite of the intro banner's "this session won't change your phase" promise.  
+**Fix:** `practiceMode?: boolean` added to `ProgramSessionLog`, set in `handleSave` from the `practiceMode` prop; `programSessions()` filters practice logs out of all progression logic. Backward-compatible (`!undefined` → old logs still count).  
+**Lesson:** When a UI promises "this won't affect your progress," the persisted record must carry a flag the progress calculator actually honors — a reassuring banner with no data backing is a lie the code tells.
+
+### Gate/lock display bugs found alongside
+**Bugs:** (1) `goodShots` input accepted values above `totalShots` → >100% goodPct that satisfied gates and polluted `score`. (2) Overview `isLocked = i > currentPhaseIndex && !nextPhaseUnlocked` un-locked *every* downstream phase once a gate was met, not just the next one. (3) `idleRestDone` set via `toggleCheck`, so re-entering the consolidate step via the step-picker flipped it back off.  
+**Fixes:** Clamp both shot inputs (and defensively at save); `isLocked = i > currentPhaseIndex + (nextPhaseUnlocked ? 1 : 0)`; explicit `setChecks(... idleRestDone: true)`.  
+**Lesson:** Numeric inputs that feed a ratio/gate need a clamp at entry; "unlock the next step" logic must add exactly 1, not flip a global boolean; use toggles only for genuinely user-toggled state, setters for one-way completion flags.
+
+### Preview harness will not hold a Supabase session on `http://localhost`
+**Issue:** Verifying the two UI-visual fixes (input clamp, phase lock icons) required an authenticated program page. The preview browser reached Supabase (sign-in recorded server-side, `last_sign_in_at` updated) but never persisted the `sb-*` auth cookies, so every authed route bounced back to `/login`. Credentials were correct (confirmed via SQL on project `ahrqubudkllkseiphhgs`).  
+**Workaround:** Fell back to `npm run typecheck` + full `npm run build` (both `/programs/[programId]` routes compiled clean) for verification of type/route correctness; UI-pixel confirmation deferred to the real device.  
+**Lesson:** The preview harness can't complete cookie-based auth flows on localhost. For auth-gated UI, verify via typecheck/build and reason about the render, or test on the real logged-in device — don't burn round-trips re-attempting the login.

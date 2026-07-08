@@ -30,6 +30,8 @@ export interface ProgramDrill {
   videoCheck?: boolean;
   /** Marks "random insert" drills that interleave clubs */
   randomInsert?: boolean;
+  /** Links the drill to a scored game — renders a "Play scored game" link to /practice/games/<gameId> */
+  gameId?: string;
 }
 
 /** Gate criteria — strict: next phase locked until met. Honor system on the % */
@@ -41,6 +43,19 @@ export interface PhaseGate {
   requiredConsecutiveSessions?: number;
   /** True if user must self-confirm video review meets criteria */
   requiresVideoConfirmation?: boolean;
+  /**
+   * Optional score-based path to satisfy this gate from saved scored-game rounds.
+   * Acts as an ALTERNATIVE to the honor-system goodPct gate (either satisfies it),
+   * so real game scores can advance the phase without ever blocking the manual path.
+   */
+  gameGate?: {
+    /** Which scored game's rounds count toward this gate */
+    gameId: string;
+    /** Minimum raw score for a round to count as passing */
+    targetScore: number;
+    /** How many passing rounds are needed */
+    requiredSessions: number;
+  };
 }
 
 export interface PhaseConsolidate {
@@ -64,6 +79,8 @@ export interface ProgramPhase {
   gate: PhaseGate;
   /** Optional notes shown on the phase detail page */
   notes?: string[];
+  /** Overrides the program-level warm-up for this phase (falls back when unset) */
+  warmup?: ProgramWarmup;
 }
 
 export interface WarmupBlock {
@@ -131,4 +148,10 @@ export interface ProgramSessionLog {
     verbalRecapDone: boolean;
     preSleepVisualizationPlanned: boolean;
   };
+  /**
+   * True when the session was run via a ?phase= override (practice / testing).
+   * These logs are stored but excluded from phase-progression logic so revisiting
+   * an earlier phase can never regress the user's real position.
+   */
+  practiceMode?: boolean;
 }

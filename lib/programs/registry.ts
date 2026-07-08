@@ -1,3 +1,4 @@
+import { BREAK_90_PROGRAM } from "./break-90-program";
 import { DRIVER_PROGRAM } from "./driver-program";
 import type { Program } from "./types";
 
@@ -8,6 +9,7 @@ import type { Program } from "./types";
  */
 export const PROGRAMS: Program[] = [
   DRIVER_PROGRAM,
+  BREAK_90_PROGRAM,
   // Future: PUTTING_PROGRAM, IRON_PROGRAM, SHORT_GAME_PROGRAM, etc.
 ];
 

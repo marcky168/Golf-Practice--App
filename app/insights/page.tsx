@@ -13,6 +13,7 @@ import {
   computeBlockConsistencyTrend,
   computeLeastPracticedClubs,
   computeScenarioClubInsights,
+  computeCommitmentStat,
 } from "@/lib/practice/insights";
 import type { SessionConfig } from "@/lib/practice/types";
 
@@ -62,6 +63,7 @@ export default async function InsightsPage() {
   const blockConsistency   = computeBlockConsistencyTrend(sessions);
   const leastPracticed     = computeLeastPracticedClubs(sessions, bagClubs);
   const scenarioInsights   = computeScenarioClubInsights(sessions);
+  const commitment         = computeCommitmentStat(sessions);
 
   return (
     <div className="min-h-screen bg-background pb-20 max-w-2xl mx-auto px-4 pt-6">
@@ -89,6 +91,7 @@ export default async function InsightsPage() {
         preSessionCorr={preSessionCorr}
         blockConsistency={blockConsistency}
         leastPracticed={leastPracticed}
+        commitment={commitment}
         totalRepsLogged={totalRepsLogged}
       />
 

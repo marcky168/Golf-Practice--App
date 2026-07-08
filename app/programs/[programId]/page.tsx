@@ -6,30 +6,36 @@ import { getProgramById } from "@/lib/programs/registry";
 import { computeProgramProgress } from "@/lib/programs/progress";
 import { CueCardDisplay } from "@/components/programs/CueCardDisplay";
 import { ProgramTestingPanel } from "@/components/programs/ProgramTestingPanel";
+import { GAMES } from "@/lib/practice/games";
 import type { SessionConfig } from "@/lib/practice/types";
 
-const PROGRAM_ID = "driver-program";
+type PageProps = {
+  params: Promise<{ programId: string }>;
+};
 
-export default async function DriverProgramOverviewPage() {
-  const program = getProgramById(PROGRAM_ID);
+export default async function ProgramOverviewPage({ params }: PageProps) {
+  const { programId } = await params;
+  const program = getProgramById(programId);
   if (!program) {
     return <div className="p-8 text-center text-muted-foreground">Program not found.</div>;
   }
 
   // Load past program sessions
   const supabase = await createClient();
-  let sessions: { started_at: string; config: SessionConfig | null }[] = [];
+  let sessions: { started_at: string; type?: string; score?: number | null; config: SessionConfig | null }[] = [];
   if (supabase) {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       const { data } = await supabase
         .from("practice_sessions")
-        .select("started_at, config")
+        .select("started_at, type, score, config")
         .eq("user_id", user.id)
         .order("started_at", { ascending: false })
         .limit(200);
       sessions = (data ?? []).map(s => ({
         started_at: s.started_at,
+        type: s.type,
+        score: s.score,
         config: s.config as SessionConfig | null,
       }));
     }
@@ -68,6 +74,11 @@ export default async function DriverProgramOverviewPage() {
               {currentPhase.gate.requiredConsecutiveSessions && (
                 <> · gate needs {currentPhase.gate.requiredConsecutiveSessions} consecutive at {currentPhase.gate.requiredGoodPct ?? "—"}%</>
               )}
+              {currentPhase.gate.gameGate && (
+                <> — or {currentPhase.gate.gameGate.requiredSessions} rounds of{" "}
+                {GAMES.find(g => g.id === currentPhase.gate.gameGate!.gameId)?.name ?? currentPhase.gate.gameGate.gameId}
+                {" "}scoring {currentPhase.gate.gameGate.targetScore}+</>
+              )}
             </div>
           </div>
         </div>
@@ -93,7 +104,9 @@ export default async function DriverProgramOverviewPage() {
         {program.phases.map((phase, i) => {
           const isPast = i < progress.currentPhaseIndex;
           const isCurrent = i === progress.currentPhaseIndex;
-          const isLocked = i > progress.currentPhaseIndex && !progress.nextPhaseUnlocked;
+          // Only the next phase unlocks when the gate is met — everything beyond it stays locked.
+          const maxReachableIndex = progress.currentPhaseIndex + (progress.nextPhaseUnlocked ? 1 : 0);
+          const isLocked = i > maxReachableIndex;
           const isNextUnlocked = i === progress.currentPhaseIndex + 1 && progress.nextPhaseUnlocked;
           return (
             <div
@@ -150,9 +163,14 @@ export default async function DriverProgramOverviewPage() {
       <div className="rounded-2xl border bg-card p-5 mb-6">
         <div className="flex items-center gap-2 mb-2">
           <BookOpen className="h-4 w-4 text-muted-foreground" />
-          <h3 className="font-semibold text-sm tracking-tight">Universal warm-up — every session</h3>
+          <h3 className="font-semibold text-sm tracking-tight">Default warm-up</h3>
           <span className="text-xs text-muted-foreground ml-auto">{program.warmup.totalDuration}</span>
         </div>
+        {program.phases.some(p => p.warmup) && (
+          <p className="text-[11px] text-muted-foreground mb-2">
+            Full-swing phases prescribe their own fuller warm-up in-session.
+          </p>
+        )}
         <div className="space-y-1.5">
           {program.warmup.blocks.map((b, i) => (
             <div key={i} className="text-xs text-muted-foreground leading-snug">

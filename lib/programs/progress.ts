@@ -15,10 +15,20 @@ import type { Program, ProgramSessionLog } from "./types";
 
 type AnySession = {
   started_at: string;
-  config: { programId?: string; programLog?: ProgramSessionLog } | null;
+  /** Row-level type/score — present for scored-game sessions (used by gameGate) */
+  type?: string;
+  score?: number | null;
+  config: { programId?: string; programLog?: ProgramSessionLog; gameId?: string } | null;
 };
 
 export type { AnySession };
+
+/** Count saved scored-game rounds for a game that met (>=) the target score. */
+function passingGameRounds(sessions: AnySession[], gameId: string, targetScore: number): number {
+  return sessions.filter(
+    s => s.type === "game" && s.score != null && s.score >= targetScore && s.config?.gameId === gameId
+  ).length;
+}
 
 export interface ProgramProgress {
   currentPhaseIndex: number;
@@ -32,10 +42,15 @@ export interface ProgramProgress {
   lastOneThingNext?: string | null;
 }
 
-/** Sessions for one program, oldest first */
+/** Real (non-practice) sessions for one program, oldest first */
 function programSessions(sessions: AnySession[], programId: string): ProgramSessionLog[] {
   return sessions
-    .filter(s => s.config?.programId === programId && s.config?.programLog)
+    .filter(
+      s =>
+        s.config?.programId === programId &&
+        s.config?.programLog &&
+        !s.config.programLog.practiceMode
+    )
     .map(s => ({ ...s.config!.programLog!, _startedAt: s.started_at }))
     .sort((a, b) => (a as any)._startedAt.localeCompare((b as any)._startedAt));
 }
@@ -47,13 +62,20 @@ export function computeProgramProgress(
   const logs = programSessions(sessions, program.id);
 
   if (logs.length === 0) {
+    // No program sessions yet, but scored-game rounds can still satisfy phase 1's gate.
+    const gate0 = program.phases[0].gate;
+    let gateMet = false;
+    if (gate0.gameGate) {
+      const { gameId, targetScore, requiredSessions } = gate0.gameGate;
+      gateMet = passingGameRounds(sessions, gameId, targetScore) >= requiredSessions;
+    }
     return {
       currentPhaseIndex: 0,
       currentPhaseId: program.phases[0].id,
       sessionsInCurrentPhase: 0,
       totalProgramSessions: 0,
-      gateMet: false,
-      nextPhaseUnlocked: false,
+      gateMet,
+      nextPhaseUnlocked: gateMet && program.phases.length > 1,
       lastSessionAt: null,
     };
   }
@@ -89,6 +111,12 @@ export function computeProgramProgress(
         gateMet = true;
       }
     }
+  }
+
+  // Alternative path: enough passing scored-game rounds also satisfies the gate.
+  if (!gateMet && gate.gameGate) {
+    const { gameId, targetScore, requiredSessions } = gate.gameGate;
+    gateMet = passingGameRounds(sessions, gameId, targetScore) >= requiredSessions;
   }
 
   const nextPhaseUnlocked = gateMet && currentPhaseIndex < program.phases.length - 1;

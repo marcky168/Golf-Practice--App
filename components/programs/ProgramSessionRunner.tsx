@@ -11,6 +11,8 @@ import { CueCardDisplay } from "./CueCardDisplay";
 import { MetronomePanel } from "./MetronomePanel";
 import { savePracticeSession } from "@/app/actions";
 import { unlockPracticeAudio } from "@/lib/practice/feedback";
+import { nextTargetScore } from "@/lib/practice/game-scores";
+import { useProgramGameScores, type GameScoreSummary } from "./useProgramGameScores";
 
 interface Props {
   program: Program;
@@ -25,6 +27,10 @@ interface Props {
 }
 
 // ── Countdown timer hook ──────────────────────────────────────────────────────
+// Derives remaining time from a wall-clock end timestamp rather than decrementing
+// state, so it stays accurate when iOS Safari suspends timers on screen-lock /
+// backgrounding (exactly what happens during the eyes-closed rest phases). A
+// visibilitychange re-sync catches up the instant the phone is unlocked.
 function useCountdown(initialSeconds: number, active: boolean, onDone?: () => void) {
   const [secondsLeft, setSecondsLeft] = useState(initialSeconds);
   const onDoneRef = useRef(onDone);
@@ -35,18 +41,29 @@ function useCountdown(initialSeconds: number, active: boolean, onDone?: () => vo
       setSecondsLeft(initialSeconds);
       return;
     }
-    setSecondsLeft(initialSeconds);
-    const id = setInterval(() => {
-      setSecondsLeft(s => {
-        if (s <= 1) {
-          clearInterval(id);
-          onDoneRef.current?.();
-          return 0;
-        }
-        return s - 1;
-      });
-    }, 1000);
-    return () => clearInterval(id);
+    const endAt = Date.now() + initialSeconds * 1000;
+    let fired = false;
+
+    const tick = () => {
+      const remaining = Math.max(0, Math.round((endAt - Date.now()) / 1000));
+      setSecondsLeft(remaining);
+      if (remaining === 0 && !fired) {
+        fired = true;
+        onDoneRef.current?.();
+      }
+    };
+
+    tick();
+    const id = setInterval(tick, 1000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") tick();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [active, initialSeconds]);
 
   return secondsLeft;
@@ -102,49 +119,57 @@ export function ProgramSessionRunner({
   async function handleSave() {
     if (saving) return;
     setSaving(true);
-    const goodPct = totalShots > 0 ? Math.round((goodShots / totalShots) * 100) : 0;
+    const safeGood = Math.min(goodShots, totalShots);
+    const goodPct = totalShots > 0 ? Math.round((safeGood / totalShots) * 100) : 0;
     const log: ProgramSessionLog = {
       programId:    program.id,
       phaseId:      phase.id,
       sessionInPhase,
-      goodShots,
+      goodShots:    safeGood,
       totalShots,
       goodPct,
       bestFeel:     bestFeel.trim() || undefined,
       oneThingNext: oneThingNext.trim() || undefined,
       checks,
+      // Practice-mode runs must never advance/regress the user's real phase.
+      ...(practiceMode ? { practiceMode: true } : {}),
     };
     const durationMinutes = Math.max(1, Math.round((Date.now() - sessionStartRef.current) / 60_000));
     const startedAt = new Date(sessionStartRef.current).toISOString();
     const endedAt   = new Date().toISOString();
 
-    const res = await savePracticeSession({
-      type:  "block",
-      title: `${program.name} — Phase ${phase.number}: ${phase.name}`,
-      durationMinutes,
-      startedAt,
-      endedAt,
-      config: {
-        // Existing required fields on SessionConfig
-        type:           "block",
-        title:          `${program.name} — Phase ${phase.number}`,
+    try {
+      const res = await savePracticeSession({
+        type:  "block",
+        title: `${program.name} — Phase ${phase.number}: ${phase.name}`,
         durationMinutes,
-        focusAreas:     [],
-        drills:         [],
-        // Program-specific:
-        programId:      program.id,
-        programLog:     log,
-      } as any,
-      score: goodPct,
-    });
+        startedAt,
+        endedAt,
+        config: {
+          // Existing required fields on SessionConfig
+          type:           "block",
+          title:          `${program.name} — Phase ${phase.number}`,
+          durationMinutes,
+          focusAreas:     [],
+          drills:         [],
+          // Program-specific:
+          programId:      program.id,
+          programLog:     log,
+        } as any,
+        score: goodPct,
+      });
 
-    setSaving(false);
-    if (res.success) {
-      setSaved(true);
-      toast.success("Session saved");
-      setTimeout(() => router.push(`/programs/${program.id}`), 800);
-    } else {
-      toast.error("Save failed — try again");
+      if (res.success) {
+        setSaved(true);
+        toast.success(practiceMode ? "Practice session saved" : "Session saved");
+        setTimeout(() => router.push(`/programs/${program.id}`), 800);
+      } else {
+        toast.error("Save failed — try again");
+      }
+    } catch {
+      toast.error("Save failed — check your connection and try again");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -207,15 +232,16 @@ export function ProgramSessionRunner({
 
   // ── WARMUP ─────────────────────────────────────────────────────────────────
   if (step === "warmup") {
+    const warmup = phase.warmup ?? program.warmup;
     return (
       <PageShell program={program} phase={phase} step={step} {...shellNav}>
         <h2 className="text-2xl font-semibold tracking-tight mb-1">Warm-up</h2>
         <p className="text-sm text-muted-foreground mb-5">
-          {program.warmup.totalDuration}. Mobility → movement prep → dynamic swings.
+          {warmup.totalDuration}. Mobility → movement prep → dynamic swings.
         </p>
 
         <div className="space-y-2 mb-6">
-          {program.warmup.blocks.map((b, i) => (
+          {warmup.blocks.map((b, i) => (
             <div key={i} className="rounded-xl border bg-card px-4 py-3">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
@@ -293,7 +319,7 @@ export function ProgramSessionRunner({
     return (
       <Consolidate
         minutes={phase.consolidate.idleRestMinutes}
-        onDone={() => { toggleCheck("idleRestDone"); advance("recap"); }}
+        onDone={() => { setChecks(c => ({ ...c, idleRestDone: true })); advance("recap"); }}
         onSkip={() => advance("recap")}
         program={program}
         phase={phase}
@@ -377,8 +403,12 @@ export function ProgramSessionRunner({
               <input
                 type="number"
                 min={0}
+                max={totalShots || undefined}
                 value={goodShots}
-                onChange={e => setGoodShots(Math.max(0, parseInt(e.target.value) || 0))}
+                onChange={e => {
+                  const g = Math.max(0, parseInt(e.target.value) || 0);
+                  setGoodShots(totalShots > 0 ? Math.min(g, totalShots) : g);
+                }}
                 className="w-full h-12 rounded-xl border bg-background px-4 text-2xl font-semibold tabular-nums text-center"
               />
             </div>
@@ -388,7 +418,11 @@ export function ProgramSessionRunner({
                 type="number"
                 min={0}
                 value={totalShots}
-                onChange={e => setTotalShots(Math.max(0, parseInt(e.target.value) || 0))}
+                onChange={e => {
+                  const t = Math.max(0, parseInt(e.target.value) || 0);
+                  setTotalShots(t);
+                  if (goodShots > t) setGoodShots(t);
+                }}
                 className="w-full h-12 rounded-xl border bg-background px-4 text-2xl font-semibold tabular-nums text-center"
               />
             </div>
@@ -586,6 +620,7 @@ function CompileBlock({
   // For block 2, surface deliberate-error drills more prominently
   const drills = phase.compileDrills;
   const metronomeDrill = drills.find(d => d.metronomeBPM);
+  const gameScores = useProgramGameScores(drills.map(d => d.gameId ?? ""));
 
   return (
     <PageShell
@@ -660,6 +695,17 @@ function CompileBlock({
               </div>
             </div>
             <p className="text-xs text-muted-foreground leading-snug">{d.description}</p>
+            {d.gameId && (
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                <Link
+                  href={`/practice/games/${d.gameId}`}
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-primary"
+                >
+                  Play scored game <ArrowRight className="h-3 w-3" />
+                </Link>
+                <GameTargetChip gameId={d.gameId} summary={gameScores[d.gameId]} />
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -668,6 +714,27 @@ function CompileBlock({
         <ArrowRight className="mr-2 h-5 w-5" /> {continueLabel}
       </Button>
     </PageShell>
+  );
+}
+
+// "Beat your last by 1" progression chip shown next to a scored-game link.
+function GameTargetChip({ gameId, summary }: { gameId: string; summary?: GameScoreSummary }) {
+  const last = summary?.last;
+  if (last === undefined) {
+    return (
+      <span className="text-[10px] font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5">
+        Set your baseline
+      </span>
+    );
+  }
+  const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+  const target = nextTargetScore(gameId, last);
+  const atCeiling = target <= Math.floor(last);
+  return (
+    <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/40 rounded-full px-2 py-0.5">
+      Last {fmt(last)}
+      {atCeiling ? " · top score — hold it" : ` · Target ${fmt(target)}`}
+    </span>
   );
 }
 

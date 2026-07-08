@@ -53,6 +53,54 @@ export function formatGameScore(gameId: string, score: number): string {
   }
 }
 
+/**
+ * Highest achievable raw score per game — used to clamp target-score progression
+ * so we never prescribe an impossible "beat it by 1". Streak games (pressure-5)
+ * are unbounded and intentionally omitted.
+ */
+export const GAME_SCORE_MAX: Record<string, number> = {
+  "10-ball-accuracy": 50,
+  "up-and-down": 6,
+  "lag-putting-ladder": 60,
+  "chip-ladder": 60,
+  "pitch-ladder": 60,
+  "9-shot-matrix": 9,
+  "random-3-hole": 5,
+  "arena-3-hole": 6,
+  "landing-zone-8": 40,
+  "pin-high-8": 40,
+  "bump-and-run-blitz": 6,
+  "makeable-putt-ladder": 5,
+  "clock-drill": 4,
+  "lag-to-tap-in": 30,
+  "wedge-window-6": 6,
+};
+
+/** Most recent saved score for a game across all clubs (null when never played). */
+export function lastScoreFromSessions(
+  sessions: Array<{ type: string; score?: number | null; started_at?: string; config: unknown }>,
+  gameId: string
+): number | undefined {
+  let latest: { at: string; score: number } | undefined;
+  for (const s of sessions) {
+    if (s.type !== "game" || s.score == null) continue;
+    if ((s.config as { gameId?: string } | null)?.gameId !== gameId) continue;
+    const at = s.started_at ?? "";
+    if (!latest || at.localeCompare(latest.at) > 0) latest = { at, score: s.score };
+  }
+  return latest?.score;
+}
+
+/**
+ * The next target score for the "beat your last by 1" mechanic.
+ * Clamped to the game's ceiling; returns the ceiling itself when already maxed.
+ */
+export function nextTargetScore(gameId: string, last: number): number {
+  const next = Math.floor(last) + 1;
+  const max = GAME_SCORE_MAX[gameId];
+  return max === undefined ? next : Math.min(next, max);
+}
+
 export type GameScoreOutcome = "first" | "beat" | "tie" | "miss";
 
 /** Compare this round's score to the saved personal best (higher = better). */

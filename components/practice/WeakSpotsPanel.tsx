@@ -1,13 +1,16 @@
 "use client";
 
+import Link from "next/link";
 import type {
   WeakSpotRow,
   TimeOfDayRow,
   PreSessionRow,
   BlockConsistencyRow,
   UnpracticedClub,
+  WeakSpotKind,
+  CommitmentStat,
 } from "@/lib/practice/insights";
-import { directionInsight, hitRateColor, hitRateBarColor } from "@/lib/practice/insights";
+import { directionInsight, hitRateColor, hitRateBarColor, recommendPracticeFor } from "@/lib/practice/insights";
 
 // ── Shared sub-components ─────────────────────────────────────────────────────
 
@@ -36,7 +39,7 @@ function SectionHeader({ title, sub }: { title: string; sub?: string }) {
   );
 }
 
-function WeakSpotList({ rows, emptyMsg }: { rows: WeakSpotRow[]; emptyMsg: string }) {
+function WeakSpotList({ rows, emptyMsg, kind }: { rows: WeakSpotRow[]; emptyMsg: string; kind?: WeakSpotKind }) {
   if (rows.length === 0) {
     return <p className="text-sm text-muted-foreground py-2">{emptyMsg}</p>;
   }
@@ -44,6 +47,7 @@ function WeakSpotList({ rows, emptyMsg }: { rows: WeakSpotRow[]; emptyMsg: strin
     <div className="space-y-3">
       {rows.map(row => {
         const direction = directionInsight(row);
+        const recommendation = kind && row.hitRate < 80 ? recommendPracticeFor(kind, row) : null;
         return (
           <div key={row.key}>
             <div className="flex items-center gap-3 mb-0.5">
@@ -56,6 +60,13 @@ function WeakSpotList({ rows, emptyMsg }: { rows: WeakSpotRow[]; emptyMsg: strin
             {direction && (
               <p className="text-[11px] text-amber-700 dark:text-amber-400 ml-32 pl-3">
                 ↳ {direction}
+              </p>
+            )}
+            {recommendation && (
+              <p className="text-[11px] ml-32 pl-3">
+                <Link href={recommendation.href} className="text-primary font-medium hover:underline">
+                  Work on this: {recommendation.label} →
+                </Link>
               </p>
             )}
           </div>
@@ -76,6 +87,7 @@ interface Props {
   preSessionCorr:    PreSessionRow[];
   blockConsistency:  BlockConsistencyRow[];
   leastPracticed:    UnpracticedClub[];
+  commitment:        CommitmentStat;
   totalRepsLogged:   number;
 }
 
@@ -88,6 +100,7 @@ export function WeakSpotsPanel({
   preSessionCorr,
   blockConsistency,
   leastPracticed,
+  commitment,
   totalRepsLogged,
 }: Props) {
   if (totalRepsLogged < 5) {
@@ -121,6 +134,17 @@ export function WeakSpotsPanel({
                 {worstClub.hitRate}% hit rate
               </span>
               {" "}— practice this specifically next session.
+              {(() => {
+                const rec = recommendPracticeFor("club", worstClub);
+                return rec ? (
+                  <>
+                    {" "}
+                    <Link href={rec.href} className="text-primary font-medium hover:underline whitespace-nowrap">
+                      {rec.label} →
+                    </Link>
+                  </>
+                ) : null;
+              })()}
             </p>
           )}
           {bestTime?.avgRating && (
@@ -169,6 +193,7 @@ export function WeakSpotsPanel({
         <WeakSpotList
           rows={byClub}
           emptyMsg="No club data yet — use rest-timer sessions to log error corrections per shot."
+          kind="club"
         />
       </div>
 
@@ -179,7 +204,7 @@ export function WeakSpotsPanel({
             title="By shot shape"
             sub="Which intended shape is hardest to execute consistently."
           />
-          <WeakSpotList rows={byShape} emptyMsg="" />
+          <WeakSpotList rows={byShape} emptyMsg="" kind="shape" />
         </div>
       )}
 
@@ -190,7 +215,7 @@ export function WeakSpotsPanel({
             title="By trajectory"
             sub="High / Medium / Low — which ball flight you struggle to control."
           />
-          <WeakSpotList rows={byTrajectory} emptyMsg="" />
+          <WeakSpotList rows={byTrajectory} emptyMsg="" kind="trajectory" />
         </div>
       )}
 
@@ -201,7 +226,41 @@ export function WeakSpotsPanel({
             title="Specific weak spots"
             sub="Club + shape combos with 3+ reps — your highest-value practice targets."
           />
-          <WeakSpotList rows={byClubShape.slice(0, 6)} emptyMsg="" />
+          <WeakSpotList rows={byClubShape.slice(0, 6)} emptyMsg="" kind="club-shape" />
+        </div>
+      )}
+
+      {/* ── Commitment on misses (Rule 9) ────────────────────────────── */}
+      {commitment.totalMissesRated >= 3 && (
+        <div>
+          <SectionHeader
+            title="Commitment on misses"
+            sub="Rule 9 — full commitment or back off. Logged on every rated miss."
+          />
+          <div className="flex items-center gap-3 mb-2">
+            <span className="text-sm w-28 shrink-0">Fully committed</span>
+            <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary rounded-full transition-all"
+                style={{ width: `${commitment.committedPct}%` }}
+              />
+            </div>
+            <span className="text-sm font-semibold tabular-nums w-10 text-right shrink-0">
+              {commitment.committedPct}%
+            </span>
+          </div>
+          {commitment.uncommittedMisses > 0 ? (
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              {100 - commitment.committedPct}% of your misses were commitment leaks
+              {" "}({commitment.uncommittedMisses} of {commitment.totalMissesRated}) — the
+              cheapest strokes to win back. Back off and re-commit before every shot.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Every rated miss came with full commitment — these are execution, not
+              mental. Keep the process; the swing work is where the gains are.
+            </p>
+          )}
         </div>
       )}
 

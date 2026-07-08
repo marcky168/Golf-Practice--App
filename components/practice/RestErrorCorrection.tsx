@@ -13,6 +13,8 @@ export type RepErrorCorrection = {
   startDirection?: "left" | "right";
   /** Distance control miss — short or long of target */
   distanceMiss?: "short" | "long";
+  /** Rule 9: on a miss, was the player fully (10/10) committed to the shot? */
+  committed?: boolean;
 };
 
 const ANSWERS: { value: CorrectionAnswer; label: string }[] = [
@@ -117,6 +119,36 @@ function DistanceRow({
   );
 }
 
+function CommitmentRow({
+  value,
+  onChange,
+}: {
+  value?: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="pt-2 border-t border-border/40 text-left">
+      <p className="text-sm font-medium leading-snug mb-2">On that miss — were you 10/10 committed?</p>
+      <div className="grid grid-cols-2 gap-2">
+        {([["Yes — fully in", true], ["No — I bailed", false]] as const).map(([label, v]) => (
+          <button
+            key={String(v)}
+            type="button"
+            onClick={() => onChange(v)}
+            className={`min-h-11 rounded-xl border text-sm font-semibold transition active:scale-[0.985] ${
+              value === v
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-card hover:bg-muted border-border"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 interface Props {
   focusCue: string;
   intention?: { shape: ShapeType; trajectory: TrajectoryType } | null;
@@ -145,6 +177,10 @@ export function RestErrorCorrection({
   const showDirection =
     hasShapeIntention &&
     (correction.startedOnLine === "no" || correction.startedOnLine === "partial");
+
+  // Show the 10/10-commitment check on any miss (Rule 9).
+  const primaryAnswer = hasShapeIntention ? correction.startedOnLine : correction.hitIntendedShot;
+  const isMiss = primaryAnswer === "no" || primaryAnswer === "partial";
 
   return (
     <div className="w-full max-w-sm rounded-2xl border bg-card px-4 py-3 text-left mb-5">
@@ -189,13 +225,13 @@ export function RestErrorCorrection({
             <QuestionRow
               prompt={`Start on your ${intention.shape} line?`}
               value={correction.startedOnLine}
-              onChange={v => merge({ startedOnLine: v, startDirection: undefined })}
+              onChange={v => merge({ startedOnLine: v, startDirection: undefined, committed: v === "yes" ? undefined : correction.committed })}
             />
           ) : (
             <QuestionRow
               prompt="Execute the shot you intended?"
               value={correction.hitIntendedShot}
-              onChange={v => merge({ hitIntendedShot: v })}
+              onChange={v => merge({ hitIntendedShot: v, committed: v === "yes" ? undefined : correction.committed })}
             />
           )}
           {showDirection && (
@@ -216,6 +252,13 @@ export function RestErrorCorrection({
           value={correction.distanceMiss}
           onChange={v => merge({ distanceMiss: v })}
         />
+
+        {isMiss && (
+          <CommitmentRow
+            value={correction.committed}
+            onChange={v => merge({ committed: v })}
+          />
+        )}
       </div>
 
       <p className="text-[10px] text-muted-foreground mt-3 leading-relaxed">

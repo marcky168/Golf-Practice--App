@@ -7,8 +7,6 @@ import { ProgramSessionRunner } from "@/components/programs/ProgramSessionRunner
 import type { SessionConfig } from "@/lib/practice/types";
 import type { ProgramSessionStep } from "@/lib/programs/types";
 
-const PROGRAM_ID = "driver-program";
-
 const SESSION_STEPS: ProgramSessionStep[] = [
   "intro",
   "warmup",
@@ -28,29 +26,33 @@ function parseStep(value?: string): ProgramSessionStep | undefined {
 }
 
 type PageProps = {
+  params: Promise<{ programId: string }>;
   searchParams: Promise<{ phase?: string; step?: string }>;
 };
 
-export default async function DriverProgramSessionPage({ searchParams }: PageProps) {
+export default async function ProgramSessionPage({ params, searchParams }: PageProps) {
+  const { programId } = await params;
   const { phase: phaseParam, step: stepParam } = await searchParams;
-  const program = getProgramById(PROGRAM_ID);
+  const program = getProgramById(programId);
   if (!program) {
     return <div className="p-8 text-center text-muted-foreground">Program not found.</div>;
   }
 
   const supabase = await createClient();
-  let sessions: { started_at: string; config: SessionConfig | null }[] = [];
+  let sessions: { started_at: string; type?: string; score?: number | null; config: SessionConfig | null }[] = [];
   if (supabase) {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       const { data } = await supabase
         .from("practice_sessions")
-        .select("started_at, config")
+        .select("started_at, type, score, config")
         .eq("user_id", user.id)
         .order("started_at", { ascending: false })
         .limit(200);
       sessions = (data ?? []).map(s => ({
         started_at: s.started_at,
+        type: s.type,
+        score: s.score,
         config: s.config as SessionConfig | null,
       }));
     }
