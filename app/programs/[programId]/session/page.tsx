@@ -9,6 +9,7 @@ import type { ProgramSessionStep } from "@/lib/programs/types";
 
 const SESSION_STEPS: ProgramSessionStep[] = [
   "intro",
+  "equipment",
   "warmup",
   "compile-1",
   "micro-rest",
@@ -27,12 +28,12 @@ function parseStep(value?: string): ProgramSessionStep | undefined {
 
 type PageProps = {
   params: Promise<{ programId: string }>;
-  searchParams: Promise<{ phase?: string; step?: string }>;
+  searchParams: Promise<{ phase?: string; step?: string; practice?: string }>;
 };
 
 export default async function ProgramSessionPage({ params, searchParams }: PageProps) {
   const { programId } = await params;
-  const { phase: phaseParam, step: stepParam } = await searchParams;
+  const { phase: phaseParam, step: stepParam, practice: practiceParam } = await searchParams;
   const program = getProgramById(programId);
   if (!program) {
     return <div className="p-8 text-center text-muted-foreground">Program not found.</div>;
@@ -67,7 +68,18 @@ export default async function ProgramSessionPage({ params, searchParams }: PageP
   const sessionInPhase =
     progress.currentPhaseId === phase.id ? progress.sessionsInCurrentPhase + 1 : 1;
   const initialStep = parseStep(stepParam);
-  const allowStepPicker = Boolean(overridePhaseId || initialStep);
+
+  /**
+   * For sequential programs, ?phase= is a testing override and its log must not
+   * move the user's real phase. For parallel-module programs, ?phase= IS the
+   * normal way to start — you pick the module — so those logs must count.
+   * Explicit ?practice=1 still forces practice mode either way.
+   */
+  const explicitPractice = practiceParam === "1" || practiceParam === "true";
+  const practiceMode = program.parallelPhases
+    ? explicitPractice
+    : explicitPractice || Boolean(overridePhaseId);
+  const allowStepPicker = Boolean(initialStep) || (!program.parallelPhases && Boolean(overridePhaseId)) || explicitPractice;
 
   if (!phase) {
     return (
@@ -87,7 +99,7 @@ export default async function ProgramSessionPage({ params, searchParams }: PageP
       sessionInPhase={sessionInPhase}
       initialStep={initialStep}
       allowStepPicker={allowStepPicker}
-      practiceMode={Boolean(overridePhaseId)}
+      practiceMode={practiceMode}
     />
   );
 }

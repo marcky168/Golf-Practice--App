@@ -1,3 +1,11 @@
+import type {
+  BlockTechData,
+  EquipmentDevice,
+  EquipmentSelection,
+  TechMetricKey,
+  TechTargets,
+} from "@/lib/practice/equipment";
+
 /**
  * Programs — structured multi-phase training plans (TPI-style).
  *
@@ -12,6 +20,12 @@
 export interface CueCard {
   cue: string;   // e.g. "Tilt and tall."
   feel: string;  // e.g. "Right shoulder lower, hands hang under chin."
+}
+
+/** Per-drill guidance for one device, e.g. "remove the Plane Perfector here". */
+export interface DrillEquipmentNote {
+  device: EquipmentDevice;
+  note: string;
 }
 
 export interface ProgramDrill {
@@ -32,6 +46,27 @@ export interface ProgramDrill {
   randomInsert?: boolean;
   /** Links the drill to a scored game — renders a "Play scored game" link to /practice/games/<gameId> */
   gameId?: string;
+  /**
+   * Restricts the drill to one compile block. Unset = shown in both blocks,
+   * which is the original behaviour every existing program relies on.
+   */
+  block?: 1 | 2;
+  /**
+   * Device-specific instructions for this drill. Only notes for devices the
+   * user switched on are rendered.
+   */
+  equipmentNotes?: DrillEquipmentNote[];
+}
+
+/** How strongly a module leans on one device. */
+export type EquipmentUsage = "required" | "recommended" | "optional" | "not-needed";
+
+/** A module's stance on one device — shown on the equipment setup screen. */
+export interface PhaseEquipmentPlan {
+  device: EquipmentDevice;
+  usage: EquipmentUsage;
+  /** What this device is for in this specific module */
+  role: string;
 }
 
 /** Gate criteria — strict: next phase locked until met. Honor system on the % */
@@ -81,6 +116,17 @@ export interface ProgramPhase {
   notes?: string[];
   /** Overrides the program-level warm-up for this phase (falls back when unset) */
   warmup?: ProgramWarmup;
+  /** Which devices this module uses and what each one is for */
+  equipment?: PhaseEquipmentPlan[];
+  /**
+   * Metrics this module tracks per block. The entry form renders only these,
+   * and only for devices that are currently switched on.
+   */
+  techMetrics?: TechMetricKey[];
+  /** Acceptance windows for this module's metrics (merged over the defaults) */
+  techTargets?: TechTargets;
+  /** Estimated module length, e.g. "25–35 min" */
+  duration?: string;
 }
 
 export interface WarmupBlock {
@@ -115,6 +161,14 @@ export interface Program {
   phases: ProgramPhase[];
   weeklySchedule: ScheduleDay[];
   defineGoodShot: DefineGoodShot;
+  /**
+   * When true the phases are parallel modules, not a sequential ladder:
+   * nothing is ever locked and the user picks which one to run today.
+   * Gates still evaluate per module as a progress signal.
+   */
+  parallelPhases?: boolean;
+  /** Label for a phase in this program's UI — "Phase" unless overridden */
+  phaseNoun?: string;
 }
 
 // ── Session-level types ──────────────────────────────────────────────────────
@@ -122,6 +176,7 @@ export interface Program {
 /** Sub-steps inside a single program session. Mirrors the session template. */
 export type ProgramSessionStep =
   | "intro"           // welcome, show cue card, pre-session visualisation
+  | "equipment"       // pick which training aids are in play today
   | "warmup"          // mobility + movement prep + dynamic swings
   | "compile-1"       // first compile block (20 min)
   | "micro-rest"      // 3 min eyes closed
@@ -154,4 +209,10 @@ export interface ProgramSessionLog {
    * an earlier phase can never regress the user's real position.
    */
   practiceMode?: boolean;
+  /** Which training aids were switched on for this session */
+  equipment?: EquipmentSelection;
+  /** Per-compile-block objective data, when any device was active */
+  blockTech?: BlockTechData[];
+  /** Share of objective checks that landed on target, 0–100 */
+  techOnTargetPct?: number;
 }

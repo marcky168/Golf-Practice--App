@@ -21,7 +21,7 @@ export function ContinueProgramCard({ primary, showBrowseAll = true }: Props) {
   const href = started ? primary.href : "/programs";
   const title = started ? `Continue ${primary.program.name}` : "Structured programs";
   const subtitle = started
-    ? `Phase ${primary.phaseNumber} — ${primary.phaseName}`
+    ? `${primary.program.phaseNoun ?? "Phase"} ${primary.phaseNumber} — ${primary.phaseName}`
     : "Break 90 Scoring Method · Driver Program — pick a plan";
 
   return (

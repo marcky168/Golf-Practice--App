@@ -3,11 +3,12 @@ import { ArrowLeft, Play, Lock, CheckCircle2, Circle, BookOpen, Calendar } from 
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/server";
 import { getProgramById } from "@/lib/programs/registry";
-import { computeProgramProgress } from "@/lib/programs/progress";
+import { computeProgramProgress, phaseSummaries } from "@/lib/programs/progress";
 import { describeGateProgress, sessionsForProgramProgress } from "@/lib/programs/dashboard";
 import { CueCardDisplay } from "@/components/programs/CueCardDisplay";
 import { ProgramTestingPanel } from "@/components/programs/ProgramTestingPanel";
 import { ProgramDetailsAccordion } from "@/components/programs/ProgramDetailsAccordion";
+import { ModulePicker } from "@/components/programs/ModulePicker";
 import type { SessionConfig } from "@/lib/practice/types";
 
 type PageProps = {
@@ -68,6 +69,29 @@ export default async function ProgramOverviewPage({ params }: PageProps) {
         {program.shortDescription}
       </p>
 
+      {/* Parallel-module programs: pick today's module, nothing is locked */}
+      {program.parallelPhases ? (
+        <>
+          <div className="rounded-2xl border-2 border-primary/30 bg-primary/5 px-5 py-4 mb-5">
+            <div className="text-[10px] uppercase tracking-widest text-primary font-semibold">
+              Pick today&apos;s module
+            </div>
+            <p className="text-sm text-muted-foreground mt-1 leading-snug">
+              All four are always available — choose the one that matches what you&apos;re
+              working on. You&apos;ll set your equipment at the start of the session.
+            </p>
+            {progress.lastOneThingNext && (
+              <div className="mt-3 text-xs text-muted-foreground italic">
+                Last session note: &ldquo;{progress.lastOneThingNext}&rdquo;
+              </div>
+            )}
+          </div>
+          <div className="mb-8">
+            <ModulePicker program={program} summaries={phaseSummaries(program, anySessions)} />
+          </div>
+        </>
+      ) : (
+        <>
       {/* Current phase + cue — above the fold */}
       <div className="rounded-2xl border-2 border-primary/30 bg-primary/5 p-5 mb-6">
         <div className="mb-4">
@@ -169,6 +193,8 @@ export default async function ProgramOverviewPage({ params }: PageProps) {
           );
         })}
       </div>
+        </>
+      )}
 
       <div className="space-y-3 mb-6">
         <ProgramDetailsAccordion

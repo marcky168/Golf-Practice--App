@@ -46,7 +46,7 @@ export default async function ProgramsHubPage() {
                     {started && card ? (
                       <div className="mt-3">
                         <div className="text-xs font-medium text-primary">
-                          Phase {card.phaseNumber} — {card.phaseName}
+                          {program.phaseNoun ?? "Phase"} {card.phaseNumber} — {card.phaseName}
                         </div>
                         <div className="h-1.5 rounded-full bg-muted overflow-hidden mt-1.5">
                           <div
@@ -58,7 +58,9 @@ export default async function ProgramsHubPage() {
                       </div>
                     ) : (
                       <div className="flex gap-3 mt-3 text-xs text-muted-foreground">
-                        <span>{program.phases.length} phases</span>
+                        <span>
+                          {program.phases.length} {(program.phaseNoun ?? "Phase").toLowerCase()}s
+                        </span>
                         <span>·</span>
                         <span>
                           {program.estimatedWeeks.min}–{program.estimatedWeeks.max} weeks

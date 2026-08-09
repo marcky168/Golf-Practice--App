@@ -11,6 +11,7 @@ import type { Program, ProgramSessionStep } from "@/lib/programs/types";
 
 const SESSION_STEPS: { id: ProgramSessionStep; label: string }[] = [
   { id: "intro", label: "Intro + cue card" },
+  { id: "equipment", label: "Equipment setup" },
   { id: "warmup", label: "Warm-up" },
   { id: "compile-1", label: "Compile 1 (metronome)" },
   { id: "micro-rest", label: "Micro-rest" },
@@ -28,6 +29,7 @@ export function ProgramTestingPanel({ program }: Props) {
   const router = useRouter();
   const [resetting, setResetting] = useState(false);
   const [open, setOpen] = useState(false);
+  const noun = program.phaseNoun ?? "Phase";
 
   async function handleReset() {
     if (
@@ -53,7 +55,9 @@ export function ProgramTestingPanel({ program }: Props) {
   }
 
   function sessionHref(phaseId: string, step?: ProgramSessionStep) {
-    const params = new URLSearchParams({ phase: phaseId });
+    // practice=1 keeps these runs out of progression for every program type.
+    // Parallel-module programs treat a bare ?phase= as a normal session start.
+    const params = new URLSearchParams({ phase: phaseId, practice: "1" });
     if (step) params.set("step", step);
     return `/programs/${program.id}/session?${params.toString()}`;
   }
@@ -82,7 +86,7 @@ export function ProgramTestingPanel({ program }: Props) {
 
           <div>
             <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-              Practice a specific phase
+              {`Practice a specific ${noun.toLowerCase()}`}
             </div>
             <div className="flex flex-wrap gap-2">
               {program.phases.map(phase => {
@@ -93,7 +97,7 @@ export function ProgramTestingPanel({ program }: Props) {
                     href={sessionHref(phase.id)}
                     className="min-h-[44px] px-3 py-2 rounded-xl border bg-card text-sm font-medium hover:border-primary/40 transition inline-flex items-center gap-1.5"
                   >
-                    Phase {phase.number}
+                    {noun} {phase.number}
                     {hasMetronome && <Music className="h-3.5 w-3.5 text-primary opacity-80" />}
                   </Link>
                 );
@@ -116,13 +120,13 @@ export function ProgramTestingPanel({ program }: Props) {
                       href={sessionHref(phase.id, "compile-1")}
                       className="min-h-[44px] px-3 py-2 rounded-xl border bg-card text-sm hover:border-primary/40 transition"
                     >
-                      Phase {phase.number} · {bpm} BPM
+                      {noun} {phase.number} · {bpm} BPM
                     </Link>
                   );
                 })}
             </div>
             <p className="text-[11px] text-muted-foreground mt-2">
-              Phases without a music icon have no metronome drill (e.g. Phase 1.5 setup-only).
+              {noun}s without a music icon have no metronome drill (e.g. Phase 1.5 setup-only).
             </p>
           </div>
 
@@ -142,7 +146,7 @@ export function ProgramTestingPanel({ program }: Props) {
               ))}
             </div>
             <p className="text-[11px] text-muted-foreground mt-2">
-              Step links use Phase 1 — pick a phase above first if you need another.
+              Step links use the first {noun.toLowerCase()} — pick one above first if you need another.
             </p>
           </div>
 

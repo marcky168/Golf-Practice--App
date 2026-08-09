@@ -51,10 +51,15 @@ export function describeGateProgress(
 ): { label: string; pct: number } {
   const phase = program.phases[progress.currentPhaseIndex];
   const gate = phase.gate;
+  const noun = (program.phaseNoun ?? "Phase").toLowerCase();
 
   if (progress.gateMet) {
     if (progress.nextPhaseUnlocked) {
       return { label: "Gate met — next phase unlocked", pct: 100 };
+    }
+    // Parallel modules never unlock anything — the gate is a per-module standard.
+    if (progress.parallel) {
+      return { label: `${phase.name} — standard met`, pct: 100 };
     }
     return { label: "Open-ended phase — keep training", pct: 100 };
   }
@@ -85,7 +90,7 @@ export function describeGateProgress(
     const pctLabel =
       gate.requiredGoodPct != null ? ` at ${gate.requiredGoodPct}%+ good` : "";
     return {
-      label: `${have} of ${needed} consecutive sessions${pctLabel}`,
+      label: `${have} of ${needed} consecutive sessions${pctLabel} in this ${noun}`,
       pct: Math.min(100, Math.round((have / needed) * 100)),
     };
   }

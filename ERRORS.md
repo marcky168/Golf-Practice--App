@@ -169,3 +169,27 @@ Invalid project directory provided, no such directory: /home/runner/work/Golf-Pr
 **Bug:** Weak-spot CTA ignored `recommendPracticeFor` and always sent users to block practice, even when Insights already knew the right game/program.  
 **Fix:** Use `recommendPracticeFor` for the href + label when hit rate &lt; 80%.  
 **Lesson:** If a pure mapper already exists for “what to work on,” the dashboard CTA must use it — don’t invent a second, dumber destination.
+
+---
+
+## Session — 2026-08-09
+
+### A handoff described itself as an update to a program that was never built
+**Issue:** The "Precision Shot Control Program — Equipment Integration v2.0" handoff opened with "This document updates the Precision Shot Control Program…". No such program existed — the registry held only `driver-program` and `break-90-program`, and a repo-wide grep for "precision"/"shot control" hit nothing but an unrelated `iron-precision` template id. Sections 2–7 were all equipment; section 4 restated modules that had no implementation to attach to.  
+**Fix:** Confirmed the gap with the user before writing code, then built the program *and* the equipment layer in one pass.  
+**Lesson:** When a document is versioned as an update ("v2.0", "updated structures"), verify v1.0 actually exists in the codebase before planning the diff. A confident revision doc is not evidence that its subject was ever shipped.
+
+### iOS Safari has no Web Bluetooth — no launch monitor can be read automatically
+**Issue:** The handoff's data model assumes the app captures 13 Mevo fields plus Hack Motion wrist angles "after each shot". The primary device is an iPhone, and iOS Safari implements no Web Bluetooth API at all, so a PWA cannot pair with a Mevo Gen 2 or a Hack Motion sensor under any circumstances. Every number has to be typed.  
+**Fix:** Surfaced the constraint before building and let the user choose the entry granularity; landed on one summary per compile block rather than per shot.  
+**Lesson:** Before designing a capture UI around external hardware, confirm the platform can actually talk to it. On iOS the answer for BLE in a browser is always no — design for manual entry and keep the tap count honest.
+
+### `inputMode="decimal"` gives no minus key on iOS — signed metrics were unenterable
+**Bug:** The first pass at the per-block metric inputs used `inputMode="decimal"`, which on iPhone shows a numeric keypad with a decimal point and no minus sign. Face-to-path, club path, attack angle and both wrist angles are all signed, and negative values carry the meaning (face left of path, bowed wrist, descending strike). Roughly half the fields could only ever have been entered as positives.  
+**Fix:** `MetricField` renders an explicit `+/−` toggle beside any metric whose range crosses zero; the text input holds only the magnitude, and the toggle owns the sign. While the field is empty the toggle "arms" a sign in local state, since there is no value to carry it yet.  
+**Lesson:** Any signed numeric input on mobile needs a sign control of its own. Never rely on the keypad to produce a minus — `type="number"` doesn't offer one on iOS either.
+
+### Wrapping an existing JSX block in a conditional left the original indentation behind
+**Issue:** Branching the program overview page into parallel-module vs sequential views meant wrapping ~120 existing lines in a fragment. Re-indenting them would have turned a ~30-line diff into a ~150-line one that was almost entirely whitespace.  
+**Decision:** Left the wrapped block at its original indentation and marked the branch with a comment, per the surgical-changes rule.  
+**Lesson:** When a conditional wrap would force a large pure-whitespace diff, keeping the original indentation is the smaller evil — but say so explicitly, or the next reader assumes it's a mistake.

@@ -40,6 +40,12 @@ export interface ProgramProgress {
   lastSessionAt: string | null;
   lastFeel?: string | null;
   lastOneThingNext?: string | null;
+  /**
+   * True for programs whose phases are parallel modules. Nothing is ever
+   * locked, so "currentPhase" means "last one you ran", not "the one you're
+   * allowed to run", and nextPhaseUnlocked is always false.
+   */
+  parallel: boolean;
 }
 
 /** Real (non-practice) sessions for one program, oldest first */
@@ -60,6 +66,7 @@ export function computeProgramProgress(
   sessions: AnySession[]
 ): ProgramProgress {
   const logs = programSessions(sessions, program.id);
+  const parallel = Boolean(program.parallelPhases);
 
   if (logs.length === 0) {
     // No program sessions yet, but scored-game rounds can still satisfy phase 1's gate.
@@ -75,8 +82,9 @@ export function computeProgramProgress(
       sessionsInCurrentPhase: 0,
       totalProgramSessions: 0,
       gateMet,
-      nextPhaseUnlocked: gateMet && program.phases.length > 1,
+      nextPhaseUnlocked: !parallel && gateMet && program.phases.length > 1,
       lastSessionAt: null,
+      parallel,
     };
   }
 
@@ -119,7 +127,9 @@ export function computeProgramProgress(
     gateMet = passingGameRounds(sessions, gameId, targetScore) >= requiredSessions;
   }
 
-  const nextPhaseUnlocked = gateMet && currentPhaseIndex < program.phases.length - 1;
+  // Parallel modules are never locked, so there is nothing to "unlock".
+  const nextPhaseUnlocked =
+    !parallel && gateMet && currentPhaseIndex < program.phases.length - 1;
 
   return {
     currentPhaseIndex,
@@ -131,7 +141,61 @@ export function computeProgramProgress(
     lastSessionAt: (latest as any)._startedAt,
     lastFeel: latest.bestFeel ?? null,
     lastOneThingNext: latest.oneThingNext ?? null,
+    parallel,
   };
+}
+
+export interface PhaseSummary {
+  phaseId: string;
+  sessions: number;
+  lastSessionAt: string | null;
+  /** goodPct of the most recent session in this phase */
+  lastGoodPct: number | null;
+  /** Gate satisfied for this phase specifically */
+  gateMet: boolean;
+}
+
+/**
+ * Per-phase stats, for programs that present every phase at once rather than
+ * a single "current" one. Evaluates each phase's gate against its own logs.
+ */
+export function phaseSummaries(
+  program: Program,
+  sessions: AnySession[]
+): Record<string, PhaseSummary> {
+  const logs = programSessions(sessions, program.id);
+  const out: Record<string, PhaseSummary> = {};
+
+  for (const phase of program.phases) {
+    const phaseLogs = logs.filter(l => l.phaseId === phase.id);
+    const latest = phaseLogs[phaseLogs.length - 1];
+    const gate = phase.gate;
+
+    let gateMet = false;
+    const needed = gate.requiredConsecutiveSessions;
+    if (needed && phaseLogs.length >= needed) {
+      const recent = phaseLogs.slice(-needed);
+      gateMet =
+        gate.requiredGoodPct != null
+          ? recent.every(l => l.goodPct >= gate.requiredGoodPct!)
+          : true;
+    }
+    if (!gateMet && gate.gameGate) {
+      const { gameId, targetScore, requiredSessions } = gate.gameGate;
+      gateMet = passingGameRounds(sessions, gameId, targetScore) >= requiredSessions;
+    }
+
+    out[phase.id] = {
+      phaseId: phase.id,
+      sessions: phaseLogs.length,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      lastSessionAt: latest ? (latest as any)._startedAt : null,
+      lastGoodPct: latest ? latest.goodPct : null,
+      gateMet,
+    };
+  }
+
+  return out;
 }
 
 /**

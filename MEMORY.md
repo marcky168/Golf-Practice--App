@@ -165,3 +165,40 @@ Bug-hunt + hardening pass ahead of live range testing. All changes in `ProgramSe
 **Session chrome:** `useSessionImmersive` + `html.session-immersive` hides AppHeader + BottomNav during `SessionRunner` / `ProgramSessionRunner`.  
 **Microcopy:** Commitment row coaching lines on bail vs fully-in; cue cards get stronger typography/gradient. Games cards demote difficulty badges and lead with “Why it helps” + PB.  
 **Rejected:** Adding Programs to BottomNav (5th item cramped on mobile); offline save queue still deferred; full Scoring Zone game still deferred (program remains the vehicle).
+
+---
+
+## Session — 2026-08-09
+
+### Precision Shot Control Program built from scratch (v1.0 never existed)
+**Finding first:** the "Equipment Integration v2.0" handoff described itself as an *update* to the Precision Shot Control Program, but no such program was in the registry — only `driver-program` and `break-90-program`. Confirmed with the user, then built both the program and the equipment layer.
+**Decision:** New registry entry `precision-shot-control` with four modules (Driver Face & Direction Control, Long Iron / FW Contact, Approach Distance Control Ladder, Sand Distance Judgment Ladder), each running Calibration → Ladder → Random → Pressure.
+
+### Free-pick modules — `parallelPhases` added to the Program model
+**Decision:** `Program.parallelPhases?: boolean`. When set, no phase is ever locked, `nextPhaseUnlocked` is forced false, and the overview page renders `ModulePicker` instead of the gated phase timeline. Gates still evaluate *per module* as a personal standard, surfaced via the new `phaseSummaries()` helper.
+**Why:** The four modules are parallel skill areas, not a ladder. Sequential gating would have blocked sand practice until driver passed — the opposite of the handoff's intent. User chose this over sequential phases.
+**Also added:** `Program.phaseNoun` ("Module") so the hub, dashboard card, testing panel, session chrome and saved session titles stop saying "Phase" for this program.
+
+### `?phase=` no longer implies practice mode for parallel programs
+**Decision:** For a parallel program, `?phase=` IS the normal way to start a session (you pick the module), so those logs must count toward progression. Sequential programs keep the old behaviour where `?phase=` is a testing override. Explicit `?practice=1` forces practice mode either way, and `ProgramTestingPanel` now always sends it.
+**Why:** Without this, every Precision session would have been silently flagged `practiceMode: true` and excluded from all progress — the module picker would have looked permanently unused.
+
+### Equipment layer is program-agnostic, and per-block not per-shot
+**Decision:** `lib/practice/equipment.ts` owns the whole model — four devices, three integration presets (Basic / Enhanced / Full Tech), 15 metric definitions, per-block `BlockTechData`, and `evaluateBlockTech()` which scores entered numbers against per-module `TechTargets`.
+**Data granularity — per-block summary, chosen by the user.** iOS Safari has no Web Bluetooth, so nothing can be read off the Mevo or Hack Motion automatically; every number is typed by hand. Per-shot entry of all 13 Mevo fields would be ~13 taps per ball across a 30-minute module. Averages once per block carry the same signal for the section 6 rules at a fraction of the cost.
+**Blank is never a failure.** A metric with no value produces no check at all — only entered numbers are ever scored, and a device that is off is never evaluated.
+**Rejected:** Merging phase targets over `DEFAULT_TECH_TARGETS`. Each module declares its full `techTargets` instead — suppressing an inherited default would otherwise require passing an explicit `undefined`, which is a trap. Defaults now only serve as a documented starting point and a fallback for modules that declare none.
+
+### Equipment step is opt-in per module, not global
+**Decision:** The new `"equipment"` session step only appears when a phase declares `equipment`. Driver Program and Break 90 keep their exact original flow, including the progress-bar denominator (`stepOrder` is built conditionally).
+**Why:** Adding a step to two existing programs was never asked for. Gating on the data keeps the change surgical.
+
+### `ProgramDrill.block` — drills can target one compile block
+**Decision:** Optional `block?: 1 | 2`. Unset means "show in both", which is what every pre-existing program relies on, so nothing changed for them. Precision uses it to map Calibration + Ladder → Compile 1 and Random + Pressure → Compile 2.
+**Why:** Without it, all four blocks of a module rendered twice, once per compile block.
+
+### Signed number entry needs an explicit sign toggle on iOS
+**Decision:** `MetricField` in `BlockTechEntry` renders a `+/−` button next to any metric whose range goes negative (face-to-path, club path, attack angle, wrist angles). The input holds the magnitude only.
+**Why:** iOS Safari's `inputMode="decimal"` keypad has no minus key, and half this module's metrics are signed. See ERRORS.md.
+
+**Open / next:** none of the equipment data is surfaced in `/insights` or `/history` yet — `techOnTargetPct` and `blockTech` are persisted in `programLog` but nothing reads them back. Pressure-set enforcement (`pressureSetPassed`) is implemented and unit-verified but not yet wired into a UI gate. Both are natural follow-ups.

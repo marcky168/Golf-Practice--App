@@ -4,16 +4,33 @@ import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { X, ArrowRight, CheckCircle2, Clock, BookOpen, Brain, Mic, AlertCircle } from "lucide-react";
+import { X, ArrowRight, CheckCircle2, Clock, BookOpen, Brain, Mic, AlertCircle, AlertTriangle, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import type { Program, ProgramPhase, ProgramSessionLog, ProgramSessionStep } from "@/lib/programs/types";
 import { CueCardDisplay } from "./CueCardDisplay";
 import { MetronomePanel } from "./MetronomePanel";
+import { BlockTechEntry } from "./BlockTechEntry";
+import { EquipmentToggles } from "@/components/practice/EquipmentToggles";
 import { savePracticeSession } from "@/app/actions";
 import { unlockPracticeAudio } from "@/lib/practice/feedback";
 import { nextTargetScore } from "@/lib/practice/game-scores";
 import { useProgramGameScores, type GameScoreSummary } from "./useProgramGameScores";
 import { useSessionImmersive } from "@/lib/use-session-immersive";
+import {
+  DEFAULT_TECH_TARGETS,
+  DEVICE_INFO,
+  NO_EQUIPMENT,
+  anyDeviceActive,
+  blockTechHasData,
+  emptyBlockTech,
+  evaluateBlockTech,
+  summariseTechChecks,
+  type BlockTechData,
+  type EquipmentSelection,
+  type TechCheck,
+  type TechMetricKey,
+  type TechTargets,
+} from "@/lib/practice/equipment";
 
 interface Props {
   program: Program;
@@ -89,9 +106,14 @@ export function ProgramSessionRunner({
   const [step, setStep] = useState<ProgramSessionStep>(initialStep ?? "intro");
   useSessionImmersive(true);
   const sessionStartRef = useRef<number>(Date.now());
-  const shellNav = allowStepPicker
-    ? { allowStepPicker: true as const, onStepChange: setStep }
-    : {};
+  // Only modules that declare an equipment plan get the toggle step — programs
+  // written before this feature keep their original flow untouched.
+  const hasEquipmentStep = Boolean(phase.equipment?.length);
+  const phaseNoun = program.phaseNoun ?? "Phase";
+  const shellNav = {
+    hasEquipmentStep,
+    ...(allowStepPicker ? { allowStepPicker: true as const, onStepChange: setStep } : {}),
+  };
 
   // Tracking sheet state
   const [goodShots, setGoodShots]   = useState(0);
@@ -108,6 +130,23 @@ export function ProgramSessionRunner({
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved]   = useState(false);
+
+  // Equipment — every device off until the user opts in for this session.
+  const [devices, setDevices] = useState<EquipmentSelection>({ ...NO_EQUIPMENT });
+  const [blockTech, setBlockTech] = useState<Record<1 | 2, BlockTechData>>({
+    1: emptyBlockTech(1),
+    2: emptyBlockTech(2),
+  });
+  const techTargets = phase.techTargets ?? DEFAULT_TECH_TARGETS;
+  const techMetrics = phase.techMetrics ?? [];
+  const equipmentActive = anyDeviceActive(devices);
+  const techChecks: TechCheck[] = equipmentActive
+    ? [
+        ...evaluateBlockTech(blockTech[1], techTargets, devices),
+        ...evaluateBlockTech(blockTech[2], techTargets, devices),
+      ]
+    : [];
+  const techSummary = summariseTechChecks(techChecks);
 
   function advance(to: ProgramSessionStep) {
     setStep(to);
@@ -135,6 +174,15 @@ export function ProgramSessionRunner({
       checks,
       // Practice-mode runs must never advance/regress the user's real phase.
       ...(practiceMode ? { practiceMode: true } : {}),
+      // Equipment is only recorded when something was actually switched on, so
+      // feel-only sessions stay exactly as they were before this feature.
+      ...(equipmentActive
+        ? {
+            equipment: devices,
+            blockTech: [blockTech[1], blockTech[2]].filter(blockTechHasData),
+            ...(techSummary.total > 0 ? { techOnTargetPct: techSummary.pct } : {}),
+          }
+        : {}),
     };
     const durationMinutes = Math.max(1, Math.round((Date.now() - sessionStartRef.current) / 60_000));
     const startedAt = new Date(sessionStartRef.current).toISOString();
@@ -143,14 +191,14 @@ export function ProgramSessionRunner({
     try {
       const res = await savePracticeSession({
         type:  "block",
-        title: `${program.name} — Phase ${phase.number}: ${phase.name}`,
+        title: `${program.name} — ${phaseNoun} ${phase.number}: ${phase.name}`,
         durationMinutes,
         startedAt,
         endedAt,
         config: {
           // Existing required fields on SessionConfig
           type:           "block",
-          title:          `${program.name} — Phase ${phase.number}`,
+          title:          `${program.name} — ${phaseNoun} ${phase.number}`,
           durationMinutes,
           focusAreas:     [],
           drills:         [],
@@ -224,9 +272,30 @@ export function ProgramSessionRunner({
         <Button
           size="lg"
           className="w-full h-14 mt-6"
-          onClick={() => { unlockPracticeAudio(); advance("warmup"); }}
+          onClick={() => { unlockPracticeAudio(); advance(hasEquipmentStep ? "equipment" : "warmup"); }}
         >
-          <ArrowRight className="mr-2 h-5 w-5" /> Start warm-up
+          <ArrowRight className="mr-2 h-5 w-5" />
+          {hasEquipmentStep ? "Next — equipment" : "Start warm-up"}
+        </Button>
+      </PageShell>
+    );
+  }
+
+  // ── EQUIPMENT ──────────────────────────────────────────────────────────────
+  if (step === "equipment") {
+    return (
+      <PageShell program={program} phase={phase} step={step} {...shellNav}>
+        <h2 className="text-2xl font-semibold tracking-tight mb-2">What have you got today?</h2>
+        <p className="text-sm text-muted-foreground mb-5">
+          Everything here is optional. Leave it all off and the module runs on feel — the
+          structure doesn&apos;t change.
+        </p>
+
+        <EquipmentToggles devices={devices} onChange={setDevices} plan={phase.equipment} />
+
+        <Button size="lg" className="w-full h-14 mt-6" onClick={() => advance("warmup")}>
+          <ArrowRight className="mr-2 h-5 w-5" />
+          {equipmentActive ? "Start warm-up" : "Skip tech — start warm-up"}
         </Button>
       </PageShell>
     );
@@ -291,6 +360,11 @@ export function ProgramSessionRunner({
         blockDuration="20 min"
         onContinue={() => advance("micro-rest")}
         continueLabel="Done — micro-rest"
+        devices={devices}
+        techMetrics={techMetrics}
+        techTargets={techTargets}
+        techData={blockTech[1]}
+        onTechChange={d => setBlockTech(b => ({ ...b, 1: d }))}
         {...shellNav}
       />
     );
@@ -311,6 +385,11 @@ export function ProgramSessionRunner({
         blockDuration="15–20 min"
         onContinue={() => advance("consolidate")}
         continueLabel="Done — start idle rest"
+        devices={devices}
+        techMetrics={techMetrics}
+        techTargets={techTargets}
+        techData={blockTech[2]}
+        onTechChange={d => setBlockTech(b => ({ ...b, 2: d }))}
         {...shellNav}
       />
     );
@@ -466,6 +545,53 @@ export function ProgramSessionRunner({
           />
         </div>
 
+        {/* Objective data summary — only when a device was on */}
+        {equipmentActive && (
+          <div className="rounded-2xl border bg-card p-4 mb-4">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="text-sm font-medium">Tech summary</div>
+              {techSummary.total > 0 && (
+                <span
+                  className={`text-sm font-bold tabular-nums ${
+                    techSummary.pct >= 70
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-amber-600 dark:text-amber-400"
+                  }`}
+                >
+                  {techSummary.onTarget}/{techSummary.total} on target
+                </span>
+              )}
+            </div>
+            <div className="text-xs text-muted-foreground mb-2">
+              {Object.entries(devices)
+                .filter(([, on]) => on)
+                .map(([d]) => DEVICE_INFO[d as keyof typeof DEVICE_INFO].name)
+                .join(" · ")}
+            </div>
+            {techChecks.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                No numbers entered — this session scores on feel alone.
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                {techChecks.map((c, i) => (
+                  <div key={`${c.id}-${i}`} className="flex items-start gap-2 text-xs">
+                    {c.status === "on-target" ? (
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+                    )}
+                    <span className="leading-snug">
+                      <span className="font-medium">{c.label}:</span>{" "}
+                      <span className="text-muted-foreground">{c.detail}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Check summary */}
         <div className="rounded-2xl border bg-card p-4 mb-6">
           <div className="text-sm font-medium mb-2">Session checks</div>
@@ -510,6 +636,7 @@ function PageShell({
   children,
   allowStepPicker,
   onStepChange,
+  hasEquipmentStep,
 }: {
   program: Program;
   phase: ProgramPhase;
@@ -517,9 +644,11 @@ function PageShell({
   children: React.ReactNode;
   allowStepPicker?: boolean;
   onStepChange?: (step: ProgramSessionStep) => void;
+  hasEquipmentStep?: boolean;
 }) {
   const stepOrder: ProgramSessionStep[] = [
     "intro",
+    ...(hasEquipmentStep ? (["equipment"] as const) : []),
     "warmup",
     "compile-1",
     "micro-rest",
@@ -528,11 +657,13 @@ function PageShell({
     "recap",
     "tracking",
   ];
-  const stepIdx = stepOrder.indexOf(step);
+  const phaseNoun = program.phaseNoun ?? "Phase";
+  const stepIdx = Math.max(0, stepOrder.indexOf(step));
   const progressPct = Math.round(((stepIdx + 1) / stepOrder.length) * 100);
 
   const stepLabels: Record<ProgramSessionStep, string> = {
     intro: "Intro",
+    equipment: "Equipment",
     warmup: "Warm-up",
     "compile-1": "Compile 1",
     "micro-rest": "Micro-rest",
@@ -548,7 +679,7 @@ function PageShell({
         <div className="max-w-xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="min-w-0 flex-1 pr-2">
             <div className="text-[10px] font-bold tracking-[0.2em] uppercase text-primary">
-              Phase {phase.number}
+              {phaseNoun} {phase.number}
             </div>
             <div className="text-sm font-medium truncate">{phase.name}</div>
           </div>
@@ -609,6 +740,12 @@ function CompileBlock({
   continueLabel,
   allowStepPicker,
   onStepChange,
+  hasEquipmentStep,
+  devices,
+  techMetrics,
+  techTargets,
+  techData,
+  onTechChange,
 }: {
   program: Program;
   phase: ProgramPhase;
@@ -618,11 +755,19 @@ function CompileBlock({
   continueLabel: string;
   allowStepPicker?: boolean;
   onStepChange?: (step: ProgramSessionStep) => void;
+  hasEquipmentStep?: boolean;
+  devices: EquipmentSelection;
+  techMetrics: TechMetricKey[];
+  techTargets: TechTargets;
+  techData: BlockTechData;
+  onTechChange: (data: BlockTechData) => void;
 }) {
-  // For block 2, surface deliberate-error drills more prominently
-  const drills = phase.compileDrills;
+  // Drills without a `block` belong to both blocks — the original behaviour
+  // every pre-existing program relies on.
+  const drills = phase.compileDrills.filter(d => d.block == null || d.block === blockNumber);
   const metronomeDrill = drills.find(d => d.metronomeBPM);
   const gameScores = useProgramGameScores(drills.map(d => d.gameId ?? ""));
+  const equipmentActive = anyDeviceActive(devices);
 
   return (
     <PageShell
@@ -631,6 +776,7 @@ function CompileBlock({
       step={blockNumber === 1 ? "compile-1" : "compile-2"}
       allowStepPicker={allowStepPicker}
       onStepChange={onStepChange}
+      hasEquipmentStep={hasEquipmentStep}
     >
       <div className="flex items-center justify-between mb-2">
         <h2 className="text-2xl font-semibold tracking-tight">Compile Block {blockNumber}</h2>
@@ -697,6 +843,21 @@ function CompileBlock({
               </div>
             </div>
             <p className="text-xs text-muted-foreground leading-snug">{d.description}</p>
+            {d.equipmentNotes && d.equipmentNotes.some(n => devices[n.device]) && (
+              <div className="mt-2 space-y-1">
+                {d.equipmentNotes
+                  .filter(n => devices[n.device])
+                  .map(n => (
+                    <div key={n.device} className="flex items-start gap-1.5 text-[11px] leading-snug">
+                      <Wrench className="h-3 w-3 text-primary shrink-0 mt-0.5" />
+                      <span>
+                        <span className="font-semibold">{DEVICE_INFO[n.device].name}:</span>{" "}
+                        <span className="text-muted-foreground">{n.note}</span>
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            )}
             {d.gameId && (
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
                 <Link
@@ -711,6 +872,16 @@ function CompileBlock({
           </div>
         ))}
       </div>
+
+      {equipmentActive && (
+        <BlockTechEntry
+          data={techData}
+          onChange={onTechChange}
+          devices={devices}
+          metrics={techMetrics}
+          targets={techTargets}
+        />
+      )}
 
       <Button size="lg" className="w-full h-14" onClick={onContinue}>
         <ArrowRight className="mr-2 h-5 w-5" /> {continueLabel}
@@ -746,18 +917,20 @@ function MicroRest({
   phase,
   allowStepPicker,
   onStepChange,
+  hasEquipmentStep,
 }: {
   onContinue: () => void;
   program: Program;
   phase: ProgramPhase;
   allowStepPicker?: boolean;
   onStepChange?: (step: ProgramSessionStep) => void;
+  hasEquipmentStep?: boolean;
 }) {
   const secondsLeft = useCountdown(180, true, () => {});
   const done = secondsLeft === 0;
 
   return (
-    <PageShell program={program} phase={phase} step="micro-rest" allowStepPicker={allowStepPicker} onStepChange={onStepChange}>
+    <PageShell program={program} phase={phase} step="micro-rest" allowStepPicker={allowStepPicker} onStepChange={onStepChange} hasEquipmentStep={hasEquipmentStep}>
       <div className="flex flex-col items-center text-center mt-8">
         <Brain className="h-12 w-12 text-blue-500 mb-4 animate-pulse" />
         <h2 className="text-2xl font-semibold tracking-tight mb-2">Micro-rest</h2>
@@ -797,6 +970,7 @@ function Consolidate({
   phase,
   allowStepPicker,
   onStepChange,
+  hasEquipmentStep,
 }: {
   minutes: number;
   onDone: () => void;
@@ -805,12 +979,13 @@ function Consolidate({
   phase: ProgramPhase;
   allowStepPicker?: boolean;
   onStepChange?: (step: ProgramSessionStep) => void;
+  hasEquipmentStep?: boolean;
 }) {
   const secondsLeft = useCountdown(minutes * 60, true);
   const done = secondsLeft === 0;
 
   return (
-    <PageShell program={program} phase={phase} step="consolidate" allowStepPicker={allowStepPicker} onStepChange={onStepChange}>
+    <PageShell program={program} phase={phase} step="consolidate" allowStepPicker={allowStepPicker} onStepChange={onStepChange} hasEquipmentStep={hasEquipmentStep}>
       <div className="flex flex-col items-center text-center mt-6">
         <div className="w-16 h-16 rounded-full bg-violet-500/15 flex items-center justify-center mb-4">
           <Brain className="h-8 w-8 text-violet-500" />
