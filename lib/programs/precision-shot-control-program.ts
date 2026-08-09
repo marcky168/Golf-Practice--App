@@ -98,11 +98,12 @@ export const PRECISION_SHOT_CONTROL_PROGRAM: Program = {
       warmup: FULL_SWING_WARMUP,
       cueCard: {
         cue: "Face owns the start line.",
-        feel: "Lead wrist bowing through impact, logo turning down.",
+        feel: "Lead wrist stable through impact, logo turning down.",
       },
       notes: [
         "The Plane Perfector comes out after the ladder — the random and pressure blocks must be free swings.",
         "Start line is a face problem before it is a path problem. Fix the face first, then narrow the path.",
+        "Hack Motion: train Pattern A (stable lead wrist extension). Driver sits at the extended end of the impact window — the hands are less forward and the strike is upward, so don't force iron numbers onto it.",
       ],
       equipment: [
         {
@@ -118,7 +119,7 @@ export const PRECISION_SHOT_CONTROL_PROGRAM: Program = {
         {
           device: "hack-motion",
           usage: "optional",
-          role: "Wrist at top (flat to slight extension) and at impact (bowed).",
+          role: "Wrist at top (flat to slight extension) and at impact (stable, not bowed) — Pattern A.",
         },
         {
           device: "plane-perfector",
@@ -139,7 +140,8 @@ export const PRECISION_SHOT_CONTROL_PROGRAM: Program = {
         attackAngleRange: { min: 0, max: 6 },
         smashFactorMin: 1.45,
         wristAtTop: { min: -5, max: 15 },
-        wristAtImpact: { min: -25, max: 0 },
+        // Pattern A — arrive stable, not bowed. Driver runs at the extended end.
+        wristAtImpact: { min: -5, max: 10 },
         centerStrikePctMin: 60,
       },
       compileDrills: [
@@ -166,7 +168,7 @@ export const PRECISION_SHOT_CONTROL_PROGRAM: Program = {
           block: 1,
           equipmentNotes: [
             { device: "plane-perfector", note: "Keep it in for the first 5–6 balls if path is today's main issue, then remove it." },
-            { device: "hack-motion", note: "Watch the impact number — the draw rungs should read more bowed than the fade rungs." },
+            { device: "hack-motion", note: "Watch the impact number — the draw rungs should read more flexed than the fade rungs. It is a relative shift, not a bowing target." },
             { device: "mevo", note: "Face-to-path should move with the intent. If it doesn't, the ladder isn't working yet." },
           ],
         },
@@ -219,17 +221,18 @@ export const PRECISION_SHOT_CONTROL_PROGRAM: Program = {
       warmup: FULL_SWING_WARMUP,
       cueCard: {
         cue: "Ball first, ground second.",
-        feel: "Lead wrist flat to bowed at impact, chest covering the ball.",
+        feel: "Lead wrist flat and stable at impact, chest covering the ball.",
       },
       notes: [
         "Wrist position at impact is the single biggest lever on contact here — this is the module where Hack Motion earns its place.",
+        "Hack Motion: stable extension into impact (Pattern A). The fault to hunt is extension growing on the way down, not a missing bow.",
         "Vary the lie every few balls once the ladder is done. A clean lie hides a low-point problem.",
       ],
       equipment: [
         {
           device: "hack-motion",
           usage: "recommended",
-          role: "Wrist flexion at impact — the direct cause of fat and thin contact.",
+          role: "Lead wrist flexion/extension at impact — the direct cause of fat and thin contact.",
         },
         {
           device: "face-impact",
@@ -252,7 +255,9 @@ export const PRECISION_SHOT_CONTROL_PROGRAM: Program = {
         attackAngleRange: { min: -5, max: -1 },
         smashFactorMin: 1.35,
         faceToPathWindowDeg: 3,
-        wristAtImpact: { min: -25, max: 0 },
+        // Pattern A, shifted slightly flexed of the driver window — the hands are
+        // further forward on a descending strike.
+        wristAtImpact: { min: -8, max: 6 },
         centerStrikePctMin: 55,
       },
       compileDrills: [

@@ -201,4 +201,10 @@ Bug-hunt + hardening pass ahead of live range testing. All changes in `ProgramSe
 **Decision:** `MetricField` in `BlockTechEntry` renders a `+/−` button next to any metric whose range goes negative (face-to-path, club path, attack angle, wrist angles). The input holds the magnitude only.
 **Why:** iOS Safari's `inputMode="decimal"` keypad has no minus key, and half this module's metrics are signed. See ERRORS.md.
 
+### HackMotion targets follow Scott Cowx Pattern A — locked decision
+**Decision:** All wrist targets in this program train **Pattern A (Stable Lead Wrist Extension)**, the release HackMotion's own app recommends for the average golfer. Impact windows: driver `−5..+10`, long iron/FW `−8..+6`, and `DEFAULT_TECH_TARGETS` matches the driver window.
+**Why:** HackMotion is a pattern-matching device, not a hit-this-number device. Its library is organised around three Scott Cowx patterns — A (stable extension, recommended), B (DJ flexion-toward-extension), C (long hitter's increasing radial). The originally shipped `−25..0` target was Pattern B, which demands timing the user would have to maintain permanently. See ERRORS.md.
+**The metric that actually defines the pattern** is the *direction extension moves from top into impact* — flat or falling passes, growing fails. The app currently gates on static windows at each checkpoint, not on that delta. Adding a derived "extension must not increase" check is the highest-value next step for Hack Motion support.
+**Rejected:** Averaging published tour impact numbers. Those averages span all three patterns, so the mean is a position no good player actually swings to.
+
 **Open / next:** none of the equipment data is surfaced in `/insights` or `/history` yet — `techOnTargetPct` and `blockTech` are persisted in `programLog` but nothing reads them back. Pressure-set enforcement (`pressureSetPassed`) is implemented and unit-verified but not yet wired into a UI gate. Both are natural follow-ups.

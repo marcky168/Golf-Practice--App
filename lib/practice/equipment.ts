@@ -398,11 +398,18 @@ export interface TechTargets {
   centerStrikePctMin?: number;
 }
 
-/** Sensible starting windows — a module overrides only what it cares about. */
+/**
+ * Sensible starting windows — a module overrides only what it cares about.
+ *
+ * Wrist ranges follow HackMotion's recommended release (Scott Cowx Pattern A —
+ * Stable Lead Wrist Extension): arrive at impact *stable*, not bowed. A heavily
+ * flexed impact target is Pattern B (the DJ pattern), which carries a permanent
+ * timing cost and is not what this program trains.
+ */
 export const DEFAULT_TECH_TARGETS: TechTargets = {
   faceToPathWindowDeg: 2,
   wristAtTop: { min: -5, max: 15 },
-  wristAtImpact: { min: -25, max: 0 },
+  wristAtImpact: { min: -5, max: 10 },
   centerStrikePctMin: 60,
 };
 
