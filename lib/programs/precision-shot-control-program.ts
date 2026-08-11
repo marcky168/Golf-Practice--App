@@ -9,7 +9,8 @@ import type { Program, ProgramWarmup } from "./types";
  * the two compile blocks of the standard program session.
  *
  * Every module declares which of the four training aids it uses, what each one
- * is for, and the acceptance windows for the numbers those aids produce.
+ * is for, which readouts to put on screen, and the window to hold each one in.
+ * All of it is guidance the user reads — nothing is captured back into the app.
  * All devices remain optional and are toggled per session.
  */
 
@@ -59,7 +60,7 @@ export const PRECISION_SHOT_CONTROL_PROGRAM: Program = {
   shortDescription:
     "Four equipment-aware modules — driver face control, long-iron contact, approach distance, sand distance",
   fullDescription:
-    "Four independent modules you pick between based on what you're training that day. Each runs Calibration → Ladder → Random → Pressure, the progression that moves a skill from conscious control to transfer. Every module supports the Plane Perfector, Hack Motion, Mevo Gen 2 Pro and face impact tape — all optional, toggled per session. When a device is on, the app scores the objective number instead of relying on your feel rating; when it's off, the module runs on feel alone with no loss of structure.",
+    "Four independent modules you pick between based on what you're training that day. Each runs Calibration → Ladder → Random → Pressure, the progression that moves a skill from conscious control to transfer. Every module supports the Plane Perfector, HackMotion, Mevo Gen2 and face impact tape — all optional, toggled per session. Switch a device on and the module tells you exactly how to set it up: which Mevo readouts to put on screen and the window to hold them in, which HackMotion pattern to select and which tour trace to overlay. You read the numbers off the device; the app only tracks your good-shot count.",
   estimatedWeeks: { min: 4, max: 12 },
   parallelPhases: true,
   phaseNoun: "Module",
@@ -70,10 +71,10 @@ export const PRECISION_SHOT_CONTROL_PROGRAM: Program = {
     criteria: [
       "Feel: the shot matched the intent you committed to before you swung",
       "Contact: strike within a ball-width of centre on the face tape",
-      "Objective (when a device is on): the module's tech window was met — face-to-path, carry error or wrist range",
+      "Objective (when a device is on): the reading on the device sat inside the module's window",
     ],
     scoring:
-      "Feel + contact = good. With a device active, a shot only counts as good when the tech window is also met.",
+      "Feel + contact = good. With a device on, only count it good when the window was met too — you judge that off the device, the app just takes your count.",
   },
 
   weeklySchedule: [
@@ -127,22 +128,29 @@ export const PRECISION_SHOT_CONTROL_PROGRAM: Program = {
           role: "Path feel during calibration and the first balls of the ladder — especially when fades dominate.",
         },
       ],
-      techMetrics: [
-        "faceToPath",
-        "clubPath",
-        "attackAngle",
-        "smashFactor",
-        "wristAtTop",
-        "wristAtImpact",
-      ],
+      techMetrics: ["faceAngle", "faceToPath", "clubPath", "attackAngle", "smashFactor", "spinRate"],
       techTargets: {
         faceToPathWindowDeg: 2,
-        attackAngleRange: { min: 0, max: 6 },
+        clubPathRange: { min: 0, max: 4 },
+        attackAngleRange: { min: 1, max: 4 },
         smashFactorMin: 1.45,
+        spinRateRange: { min: 2100, max: 2800 },
         wristAtTop: { min: -5, max: 15 },
         // Pattern A — arrive stable, not bowed. Driver runs at the extended end.
         wristAtImpact: { min: -5, max: 10 },
         centerStrikePctMin: 60,
+      },
+      hackMotion: {
+        pattern: "Pattern A — Knuckles-down release",
+        patternNote:
+          "Stable lead wrist extension. Extension must not grow on the way down — that is the face opening on the way down.",
+        referenceSwings: [
+          "LPGA stable extension, Dr",
+          "Thorbjorn Olesen, Driver",
+          "Lucas Bjerregaard, Driver",
+          "Setting impact position at address, Driver",
+        ],
+        avoid: "Mark Wilson, Driver — that is the Pattern C radial example",
       },
       compileDrills: [
         {
@@ -250,15 +258,29 @@ export const PRECISION_SHOT_CONTROL_PROGRAM: Program = {
           role: "Path consistency during the first few calibration swings only.",
         },
       ],
-      techMetrics: ["attackAngle", "smashFactor", "faceToPath", "wristAtImpact"],
+      techMetrics: ["lowPoint", "attackAngle", "smashFactor", "faceToPath"],
       techTargets: {
-        attackAngleRange: { min: -5, max: -1 },
-        smashFactorMin: 1.35,
+        lowPointInchesAfterBall: { min: 1, max: 4 },
+        attackAngleRange: { min: -4.5, max: -1.5 },
+        smashFactorMin: 1.36,
         faceToPathWindowDeg: 3,
+        wristAtTop: { min: -5, max: 15 },
         // Pattern A, shifted slightly flexed of the driver window — the hands are
         // further forward on a descending strike.
         wristAtImpact: { min: -8, max: 6 },
         centerStrikePctMin: 55,
+      },
+      hackMotion: {
+        pattern: "Pattern A — Knuckles-down release",
+        patternNote:
+          "The fault to hunt is extension growing into impact, not a missing bow.",
+        referenceSwings: [
+          "Thorbjorn Olesen, 3i",
+          "Lucas Bjerregaard, 5i",
+          "Stable Extension, PGA tour, 7i",
+          "LPGA stable ext, little rotation, 7i",
+        ],
+        avoid: "Extreme Flexion to Extension example — that is Pattern B",
       },
       compileDrills: [
         {
@@ -363,10 +385,24 @@ export const PRECISION_SHOT_CONTROL_PROGRAM: Program = {
           role: "Rarely relevant at these swing lengths.",
         },
       ],
-      techMetrics: ["carry", "carryTarget", "totalDistance", "spinRate", "landingAngle"],
+      techMetrics: ["carry", "totalDistance", "landingAngle", "spinRate"],
       techTargets: {
         carryErrorYds: 5,
+        landingAngleRange: { min: 45, max: 52 },
         centerStrikePctMin: 60,
+      },
+      hackMotion: {
+        pattern: "Pattern A — Knuckles-down release",
+        patternNote:
+          "Only worth attaching if contact is what is costing you distance. The trail-wrist traces are the more useful ones here.",
+        referenceSwings: [
+          "Pitch Shot, 70 yards",
+          "Pitch, low launch, high spin, 75 yards",
+          "30 yard pitch shot",
+          "Finesse Wedge, 30 yards",
+          "Trail wrist, 50-yard pitch",
+          "Trail wrist, 75-yard pitch",
+        ],
       },
       compileDrills: [
         {
@@ -467,9 +503,14 @@ export const PRECISION_SHOT_CONTROL_PROGRAM: Program = {
           role: "No role in this module.",
         },
       ],
-      techMetrics: ["carry", "carryTarget"],
+      techMetrics: ["carry"],
       techTargets: {
         carryErrorYds: 4,
+      },
+      hackMotion: {
+        pattern: "Pattern A — Knuckles-down release",
+        patternNote: "Optional here. Only attach it if your wrists are breaking down through the sand.",
+        referenceSwings: ["Bunker Shot, short", "Pitch, high launch, low spin, 10 yards"],
       },
       compileDrills: [
         {

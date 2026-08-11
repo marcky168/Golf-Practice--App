@@ -4,12 +4,12 @@ import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { X, ArrowRight, CheckCircle2, Clock, BookOpen, Brain, Mic, AlertCircle, AlertTriangle, Wrench } from "lucide-react";
+import { X, ArrowRight, CheckCircle2, Clock, BookOpen, Brain, Mic, AlertCircle, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import type { Program, ProgramPhase, ProgramSessionLog, ProgramSessionStep } from "@/lib/programs/types";
 import { CueCardDisplay } from "./CueCardDisplay";
 import { MetronomePanel } from "./MetronomePanel";
-import { BlockTechEntry } from "./BlockTechEntry";
+import { ModuleTargets } from "./ModuleTargets";
 import { EquipmentToggles } from "@/components/practice/EquipmentToggles";
 import { savePracticeSession } from "@/app/actions";
 import { unlockPracticeAudio } from "@/lib/practice/feedback";
@@ -21,13 +21,8 @@ import {
   DEVICE_INFO,
   NO_EQUIPMENT,
   anyDeviceActive,
-  blockTechHasData,
-  emptyBlockTech,
-  evaluateBlockTech,
-  summariseTechChecks,
-  type BlockTechData,
   type EquipmentSelection,
-  type TechCheck,
+  type HackMotionSetup,
   type TechMetricKey,
   type TechTargets,
 } from "@/lib/practice/equipment";
@@ -133,20 +128,9 @@ export function ProgramSessionRunner({
 
   // Equipment — every device off until the user opts in for this session.
   const [devices, setDevices] = useState<EquipmentSelection>({ ...NO_EQUIPMENT });
-  const [blockTech, setBlockTech] = useState<Record<1 | 2, BlockTechData>>({
-    1: emptyBlockTech(1),
-    2: emptyBlockTech(2),
-  });
   const techTargets = phase.techTargets ?? DEFAULT_TECH_TARGETS;
   const techMetrics = phase.techMetrics ?? [];
   const equipmentActive = anyDeviceActive(devices);
-  const techChecks: TechCheck[] = equipmentActive
-    ? [
-        ...evaluateBlockTech(blockTech[1], techTargets, devices),
-        ...evaluateBlockTech(blockTech[2], techTargets, devices),
-      ]
-    : [];
-  const techSummary = summariseTechChecks(techChecks);
 
   function advance(to: ProgramSessionStep) {
     setStep(to);
@@ -176,13 +160,7 @@ export function ProgramSessionRunner({
       ...(practiceMode ? { practiceMode: true } : {}),
       // Equipment is only recorded when something was actually switched on, so
       // feel-only sessions stay exactly as they were before this feature.
-      ...(equipmentActive
-        ? {
-            equipment: devices,
-            blockTech: [blockTech[1], blockTech[2]].filter(blockTechHasData),
-            ...(techSummary.total > 0 ? { techOnTargetPct: techSummary.pct } : {}),
-          }
-        : {}),
+      ...(equipmentActive ? { equipment: devices } : {}),
     };
     const durationMinutes = Math.max(1, Math.round((Date.now() - sessionStartRef.current) / 60_000));
     const startedAt = new Date(sessionStartRef.current).toISOString();
@@ -293,6 +271,20 @@ export function ProgramSessionRunner({
 
         <EquipmentToggles devices={devices} onChange={setDevices} plan={phase.equipment} />
 
+        {equipmentActive && (
+          <div className="mt-6">
+            <div className="text-xs uppercase tracking-widest text-muted-foreground mb-2 font-semibold">
+              Set up like this
+            </div>
+            <ModuleTargets
+              devices={devices}
+              metrics={techMetrics}
+              targets={techTargets}
+              hackMotion={phase.hackMotion}
+            />
+          </div>
+        )}
+
         <Button size="lg" className="w-full h-14 mt-6" onClick={() => advance("warmup")}>
           <ArrowRight className="mr-2 h-5 w-5" />
           {equipmentActive ? "Start warm-up" : "Skip tech — start warm-up"}
@@ -363,8 +355,7 @@ export function ProgramSessionRunner({
         devices={devices}
         techMetrics={techMetrics}
         techTargets={techTargets}
-        techData={blockTech[1]}
-        onTechChange={d => setBlockTech(b => ({ ...b, 1: d }))}
+        hackMotion={phase.hackMotion}
         {...shellNav}
       />
     );
@@ -388,8 +379,7 @@ export function ProgramSessionRunner({
         devices={devices}
         techMetrics={techMetrics}
         techTargets={techTargets}
-        techData={blockTech[2]}
-        onTechChange={d => setBlockTech(b => ({ ...b, 2: d }))}
+        hackMotion={phase.hackMotion}
         {...shellNav}
       />
     );
@@ -545,50 +535,16 @@ export function ProgramSessionRunner({
           />
         </div>
 
-        {/* Objective data summary — only when a device was on */}
+        {/* What was in play — recorded, not scored */}
         {equipmentActive && (
           <div className="rounded-2xl border bg-card p-4 mb-4">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <div className="text-sm font-medium">Tech summary</div>
-              {techSummary.total > 0 && (
-                <span
-                  className={`text-sm font-bold tabular-nums ${
-                    techSummary.pct >= 70
-                      ? "text-emerald-600 dark:text-emerald-400"
-                      : "text-amber-600 dark:text-amber-400"
-                  }`}
-                >
-                  {techSummary.onTarget}/{techSummary.total} on target
-                </span>
-              )}
-            </div>
-            <div className="text-xs text-muted-foreground mb-2">
+            <div className="text-sm font-medium mb-1">Equipment used</div>
+            <div className="text-xs text-muted-foreground">
               {Object.entries(devices)
                 .filter(([, on]) => on)
                 .map(([d]) => DEVICE_INFO[d as keyof typeof DEVICE_INFO].name)
                 .join(" · ")}
             </div>
-            {techChecks.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                No numbers entered — this session scores on feel alone.
-              </p>
-            ) : (
-              <div className="space-y-1.5">
-                {techChecks.map((c, i) => (
-                  <div key={`${c.id}-${i}`} className="flex items-start gap-2 text-xs">
-                    {c.status === "on-target" ? (
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-                    ) : (
-                      <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
-                    )}
-                    <span className="leading-snug">
-                      <span className="font-medium">{c.label}:</span>{" "}
-                      <span className="text-muted-foreground">{c.detail}</span>
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         )}
 
@@ -744,8 +700,7 @@ function CompileBlock({
   devices,
   techMetrics,
   techTargets,
-  techData,
-  onTechChange,
+  hackMotion,
 }: {
   program: Program;
   phase: ProgramPhase;
@@ -759,8 +714,7 @@ function CompileBlock({
   devices: EquipmentSelection;
   techMetrics: TechMetricKey[];
   techTargets: TechTargets;
-  techData: BlockTechData;
-  onTechChange: (data: BlockTechData) => void;
+  hackMotion?: HackMotionSetup;
 }) {
   // Drills without a `block` belong to both blocks — the original behaviour
   // every pre-existing program relies on.
@@ -874,13 +828,15 @@ function CompileBlock({
       </div>
 
       {equipmentActive && (
-        <BlockTechEntry
-          data={techData}
-          onChange={onTechChange}
-          devices={devices}
-          metrics={techMetrics}
-          targets={techTargets}
-        />
+        <div className="mb-5">
+          <ModuleTargets
+            devices={devices}
+            metrics={techMetrics}
+            targets={techTargets}
+            hackMotion={hackMotion}
+            compact
+          />
+        </div>
       )}
 
       <Button size="lg" className="w-full h-14" onClick={onContinue}>

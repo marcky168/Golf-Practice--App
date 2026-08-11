@@ -1,7 +1,7 @@
 import type {
-  BlockTechData,
   EquipmentDevice,
   EquipmentSelection,
+  HackMotionSetup,
   TechMetricKey,
   TechTargets,
 } from "@/lib/practice/equipment";
@@ -118,13 +118,12 @@ export interface ProgramPhase {
   warmup?: ProgramWarmup;
   /** Which devices this module uses and what each one is for */
   equipment?: PhaseEquipmentPlan[];
-  /**
-   * Metrics this module tracks per block. The entry form renders only these,
-   * and only for devices that are currently switched on.
-   */
+  /** Mevo readouts to put on screen for this module */
   techMetrics?: TechMetricKey[];
-  /** Acceptance windows for this module's metrics (merged over the defaults) */
+  /** The windows to hold those readings inside (falls back to the defaults) */
   techTargets?: TechTargets;
+  /** Which HackMotion pattern to select and which tour trace to overlay */
+  hackMotion?: HackMotionSetup;
   /** Estimated module length, e.g. "25–35 min" */
   duration?: string;
 }
@@ -209,10 +208,9 @@ export interface ProgramSessionLog {
    * an earlier phase can never regress the user's real position.
    */
   practiceMode?: boolean;
-  /** Which training aids were switched on for this session */
+  /**
+   * Which training aids were switched on. Recorded for history context only —
+   * the app deliberately does not capture launch monitor or wrist numbers.
+   */
   equipment?: EquipmentSelection;
-  /** Per-compile-block objective data, when any device was active */
-  blockTech?: BlockTechData[];
-  /** Share of objective checks that landed on target, 0–100 */
-  techOnTargetPct?: number;
 }

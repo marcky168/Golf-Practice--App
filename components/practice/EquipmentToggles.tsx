@@ -137,9 +137,6 @@ export function EquipmentToggles({ devices, onChange, plan }: Props) {
                   {usage.label}
                 </span>
               )}
-              {on && (
-                <div className="text-[11px] text-primary mt-1.5 leading-snug">{info.provides}</div>
-              )}
             </button>
           );
         })}
